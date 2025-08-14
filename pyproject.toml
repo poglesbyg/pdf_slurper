@@ -1,0 +1,37 @@
+[project]
+name = "pdf-slurper"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pymupdf>=1.24.0",
+    "rich>=13.7.0",
+    "typer>=0.12.3",
+    "pdfplumber>=0.11.4",
+    "sqlmodel>=0.0.22",
+    "fastapi>=0.112.0",
+    "uvicorn>=0.30.0",
+    "jinja2>=3.1.4",
+    "python-multipart>=0.0.9",
+]
+
+[project.scripts]
+pdf-slurp = "pdf_slurper.cli:app"
+pdf-slurp-web = "pdf_slurper.server:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["pdf_slurper*"]
+
+[tool.setuptools.package-data]
+pdf_slurper = ["templates/*.html"]
+
+[tool.uv]
+package = true

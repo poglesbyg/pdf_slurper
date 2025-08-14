@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Submission {{ submission.id }}</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 2rem; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ddd; padding: 0.4rem; font-size: 14px; }
+    th { background: #f5f5f5; text-align: left; }
+  </style>
+</head>
+<body>
+  <a href="/">← Back</a>
+  <h1>Submission {{ submission.id }}</h1>
+  <p><strong>Title:</strong> {{ submission.title }}</p>
+  <p><strong>Created:</strong> {{ submission.created_at }}</p>
+  <p><strong>File:</strong> {{ submission.source_file }}</p>
+
+  <h2>Samples ({{ samples|length }})</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>row</th>
+        <th>table</th>
+        <th>page</th>
+        <th>name</th>
+        <th>vol(µL)</th>
+        <th>qubit</th>
+        <th>nanodrop</th>
+        <th>A260/280</th>
+        <th>A260/230</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in samples %}
+      <tr>
+        <td>{{ s.row_index }}</td>
+        <td>{{ s.table_index }}</td>
+        <td>{{ s.page_index + 1 }}</td>
+        <td>{{ s.name }}</td>
+        <td>{{ s.volume_ul or '' }}</td>
+        <td>{{ s.qubit_ng_per_ul or '' }}</td>
+        <td>{{ s.nanodrop_ng_per_ul or '' }}</td>
+        <td>{{ s.a260_a280 or '' }}</td>
+        <td>{{ s.a260_a230 or '' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+</body>
+</html>
+
+
