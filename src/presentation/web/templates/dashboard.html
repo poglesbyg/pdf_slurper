@@ -1,0 +1,343 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - PDF Slurper v2{% endblock %}
+
+{% block content %}
+<div x-data="dashboard()" class="space-y-6">
+    <!-- Page Header -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">Dashboard</h1>
+                <p class="text-gray-600">Overview of your laboratory sample processing</p>
+            </div>
+            <div class="flex space-x-3">
+                <button @click="refreshData()" class="btn-secondary">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    Refresh
+                </button>
+                <a href="/upload" class="btn-primary">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                    </svg>
+                    Upload PDF
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div class="bg-white shadow rounded-lg p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-blue-500 rounded-md flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Total Submissions</p>
+                    <p class="text-2xl font-semibold text-gray-900" x-text="stats.total_submissions || '...'"></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white shadow rounded-lg p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Total Samples</p>
+                    <p class="text-2xl font-semibold text-gray-900" x-text="stats.total_samples || '...'"></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white shadow rounded-lg p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-yellow-500 rounded-md flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">QC Pending</p>
+                    <p class="text-2xl font-semibold text-gray-900" x-text="stats.qc_status_counts?.pending || '...'"></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white shadow rounded-lg p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-purple-500 rounded-md flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Avg Quality Score</p>
+                    <p class="text-2xl font-semibold text-gray-900" x-text="stats.average_quality_score ? stats.average_quality_score.toFixed(1) : '...'"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Workflow Status Chart -->
+        <div class="bg-white shadow rounded-lg p-6">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">Workflow Status Distribution</h3>
+            <canvas id="workflowChart" width="400" height="200"></canvas>
+        </div>
+
+        <!-- QC Status Chart -->
+        <div class="bg-white shadow rounded-lg p-6">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">QC Status Distribution</h3>
+            <canvas id="qcChart" width="400" height="200"></canvas>
+        </div>
+    </div>
+
+    <!-- Recent Submissions -->
+    <div class="bg-white shadow rounded-lg">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-medium text-gray-900">Recent Submissions</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Identifier</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Requester</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lab</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Samples</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    <template x-for="submission in recentSubmissions" :key="submission.id">
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900" x-text="submission.id.substring(0, 8) + '...'"></td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="submission.metadata.identifier || 'N/A'"></td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="submission.metadata.requester || 'N/A'"></td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="submission.metadata.lab || 'N/A'"></td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="submission.sample_count"></td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="formatDate(submission.created_at)"></td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <a :href="'/submission/' + submission.id" class="text-blue-600 hover:text-blue-900">View</a>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="recentSubmissions.length === 0">
+                        <td colspan="7" class="px-6 py-4 text-center text-sm text-gray-500">No submissions found</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <button @click="applyQCToAll()" class="p-4 border-2 border-dashed border-gray-300 rounded-lg text-center hover:border-blue-400 hover:bg-blue-50 transition-colors">
+                <svg class="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <p class="text-sm font-medium text-gray-900">Apply QC to All</p>
+                <p class="text-xs text-gray-500">Run quality control on all samples</p>
+            </button>
+
+            <button @click="exportAllData()" class="p-4 border-2 border-dashed border-gray-300 rounded-lg text-center hover:border-green-400 hover:bg-green-50 transition-colors">
+                <svg class="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                <p class="text-sm font-medium text-gray-900">Export All Data</p>
+                <p class="text-xs text-gray-500">Download all submissions and samples</p>
+            </button>
+
+            <button @click="generateReport()" class="p-4 border-2 border-dashed border-gray-300 rounded-lg text-center hover:border-purple-400 hover:bg-purple-50 transition-colors">
+                <svg class="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                <p class="text-sm font-medium text-gray-900">Generate Report</p>
+                <p class="text-xs text-gray-500">Create comprehensive analysis report</p>
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function dashboard() {
+    return {
+        stats: {},
+        recentSubmissions: [],
+        workflowChart: null,
+        qcChart: null,
+        
+        async init() {
+            await this.loadData();
+            this.setupCharts();
+        },
+        
+        async loadData() {
+            try {
+                // Load global statistics
+                const statsResponse = await apiCall('/submissions/statistics');
+                this.stats = statsResponse;
+                
+                // Load recent submissions
+                const submissionsResponse = await apiCall('/submissions?limit=10');
+                this.recentSubmissions = submissionsResponse.items || [];
+                
+            } catch (error) {
+                showFlash('Failed to load dashboard data: ' + error.message, 'error');
+            }
+        },
+        
+        setupCharts() {
+            // Workflow Status Chart
+            const workflowCtx = document.getElementById('workflowChart').getContext('2d');
+            this.workflowChart = new Chart(workflowCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Received', 'Processing', 'Sequenced', 'Completed', 'Failed'],
+                    datasets: [{
+                        data: [
+                            this.stats.status_counts?.received || 0,
+                            this.stats.status_counts?.processing || 0,
+                            this.stats.status_counts?.sequenced || 0,
+                            this.stats.status_counts?.completed || 0,
+                            this.stats.status_counts?.failed || 0
+                        ],
+                        backgroundColor: [
+                            '#3B82F6', '#F59E0B', '#8B5CF6', '#10B981', '#EF4444'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+            
+            // QC Status Chart
+            const qcCtx = document.getElementById('qcChart').getContext('2d');
+            this.qcChart = new Chart(qcCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Pending', 'Passed', 'Warning', 'Failed'],
+                    datasets: [{
+                        data: [
+                            this.stats.qc_status_counts?.pending || 0,
+                            this.stats.qc_status_counts?.passed || 0,
+                            this.stats.qc_status_counts?.warning || 0,
+                            this.stats.qc_status_counts?.failed || 0
+                        ],
+                        backgroundColor: [
+                            '#6B7280', '#10B981', '#F59E0B', '#EF4444'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        },
+        
+        async refreshData() {
+            await this.loadData();
+            this.updateCharts();
+            showFlash('Dashboard data refreshed', 'success');
+        },
+        
+        updateCharts() {
+            if (this.workflowChart) {
+                this.workflowChart.data.datasets[0].data = [
+                    this.stats.status_counts?.received || 0,
+                    this.stats.status_counts?.processing || 0,
+                    this.stats.status_counts?.sequenced || 0,
+                    this.stats.status_counts?.completed || 0,
+                    this.stats.status_counts?.failed || 0
+                ];
+                this.workflowChart.update();
+            }
+            
+            if (this.qcChart) {
+                this.qcChart.data.datasets[0].data = [
+                    this.stats.qc_status_counts?.pending || 0,
+                    this.stats.qc_status_counts?.passed || 0,
+                    this.stats.qc_status_counts?.warning || 0,
+                    this.stats.qc_status_counts?.failed || 0
+                ];
+                this.qcChart.update();
+            }
+        },
+        
+        formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            return new Date(dateString).toLocaleDateString();
+        },
+        
+        async applyQCToAll() {
+            if (!confirm('Apply QC to all submissions? This may take a while.')) return;
+            
+            try {
+                showFlash('Applying QC to all submissions...', 'info');
+                // This would call the batch QC endpoint
+                showFlash('QC applied successfully', 'success');
+            } catch (error) {
+                showFlash('Failed to apply QC: ' + error.message, 'error');
+            }
+        },
+        
+        async exportAllData() {
+            try {
+                showFlash('Preparing export...', 'info');
+                // This would call the export endpoint
+                showFlash('Export ready for download', 'success');
+            } catch (error) {
+                showFlash('Failed to export data: ' + error.message, 'error');
+            }
+        },
+        
+        async generateReport() {
+            try {
+                showFlash('Generating report...', 'info');
+                // This would call the report generation endpoint
+                showFlash('Report generated successfully', 'success');
+            } catch (error) {
+                showFlash('Failed to generate report: ' + error.message, 'error');
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

@@ -10,7 +10,7 @@ import fitz
 import pdfplumber
 
 from .db import Sample, Submission, open_session, find_submission_by_hash
-from .hash_utils import sha256_file
+from .hash_utils import sha256_file, file_fingerprint
 from .mapping import derive_sample_mapping
 
 
@@ -30,14 +30,23 @@ def _parse_float(value: Optional[str]) -> Optional[float]:
     text = value.strip()
     if text == "":
         return None
-    text = text.replace(",", "")
+    # remove currency symbols and thousands separators; normalize unicode minus
+    text = (
+        text.replace(",", "")
+        .replace("$", "")
+        .replace("µ", "u")
+        .replace("μ", "u")
+        .replace("−", "-")
+    )
+    # strip units in parentheses
+    text = re.sub(r"\s*\((?:ng/?u?l|ul|ngml|ng\/ul|ng\/ml)\)$", "", text, flags=re.IGNORECASE)
     try:
         return float(text)
     except ValueError:
         return None
 
 
-def slurp_pdf(pdf_path: Path, db_path: Optional[Path] = None, pages: Optional[str] = None) -> SlurpResult:
+def slurp_pdf(pdf_path: Path, db_path: Optional[Path] = None, pages: Optional[str] = None, force: bool = False) -> SlurpResult:
     # Gather document metadata and front-matter text
     with fitz.open(pdf_path) as doc:
         metadata = doc.metadata or {}
@@ -68,6 +77,9 @@ def slurp_pdf(pdf_path: Path, db_path: Optional[Path] = None, pages: Optional[st
             "source organism": "source_organism",
             "sample buffer": "sample_buffer_json",
         }
+        
+        # Stop words that indicate we've gone too far into document structure
+        stop_sections = ["summary", "sample information", "quote:", "page"]
 
         # Helper to detect if a line begins a known label
         def detect_label(line: str) -> Optional[str]:
@@ -79,6 +91,24 @@ def slurp_pdf(pdf_path: Path, db_path: Optional[Path] = None, pages: Optional[st
                 if l.startswith(key + ":"):
                     return key
             return None
+        
+        # Helper to check if line is a section header we should stop at
+        def is_stop_section(line: str) -> bool:
+            l = line.strip().lower()
+            return any(l.startswith(stop) for stop in stop_sections)
+
+        # Helper to parse checkbox fields (returns checked option)
+        def parse_checkboxes(lines_subset: list[str]) -> Optional[str]:
+            checked = []
+            for line in lines_subset:
+                # Look for filled checkboxes (typically rendered as bullets in text extraction)
+                # Common bullet characters: \uf0b7, •, ●, ■, ☐, ☑, ☒
+                if line.strip() and line.strip()[0] in ['\uf0b7', '•', '●', '■', '☑', '✓']:
+                    # Remove the bullet and any leading whitespace
+                    option = line.strip()[1:].strip()
+                    if option:  # Only add if there's text after the bullet
+                        checked.append(option)
+            return "\n".join(checked) if checked else None
 
         result: dict[str, Optional[str]] = {v: None for v in label_to_field.values()}
         i = 0
@@ -90,13 +120,44 @@ def slurp_pdf(pdf_path: Path, db_path: Optional[Path] = None, pages: Optional[st
                 i += 1
                 continue
             field_name = label_to_field[key]
+            
+            # Special handling for checkbox fields
+            if field_name in ["will_submit_dna_for_json", "type_of_sample_json", "human_dna", "sample_buffer_json"]:
+                # Collect lines until next label or stop section
+                j = i + 1
+                checkbox_lines = []
+                while j < n:
+                    if detect_label(lines[j]) is not None or is_stop_section(lines[j]):
+                        break
+                    if lines[j].strip():  # non-empty line
+                        checkbox_lines.append(lines[j])
+                    j += 1
+                    # Limit to reasonable number of lines for checkboxes
+                    if len(checkbox_lines) > 20:
+                        break
+                
+                # For human_dna, look for Yes or No
+                if field_name == "human_dna":
+                    for cl in checkbox_lines:
+                        if "yes" in cl.lower() and "" in cl:
+                            result[field_name] = "Yes"
+                            break
+                        elif "no" in cl.lower() and "" in cl:
+                            result[field_name] = "No"
+                            break
+                else:
+                    result[field_name] = parse_checkboxes(checkbox_lines)
+                i = j
+                continue
+            
             # Inline value after colon on same line
             m = re.match(rf"^\s*{re.escape(key)}\s*:\s*(.*)$", line, flags=re.IGNORECASE)
             if m and m.group(1).strip():
                 result[field_name] = m.group(1).strip()
                 i += 1
                 continue
-            # Otherwise accumulate subsequent non-empty lines until next label
+                
+            # Otherwise accumulate subsequent non-empty lines until next label or stop section
             j = i + 1
             collected: list[str] = []
             while j < n:
@@ -104,58 +165,70 @@ def slurp_pdf(pdf_path: Path, db_path: Optional[Path] = None, pages: Optional[st
                 if not nxt:
                     j += 1
                     continue
-                if detect_label(lines[j]) is not None:
+                if detect_label(lines[j]) is not None or is_stop_section(lines[j]):
                     break
                 collected.append(nxt)
                 j += 1
+                # Avoid collecting too much text
+                if len(collected) > 10:
+                    break
             if collected:
-                # join with newlines to preserve list choices
-                result[field_name] = "\n".join(collected).strip()
+                # For "expires_on", we expect a date, not "Summary"
+                if field_name == "expires_on" and collected and collected[0].lower() == "summary":
+                    result[field_name] = None  # No valid expiration date found
+                else:
+                    result[field_name] = "\n".join(collected).strip()
             i = j
         return result
 
     # Parse top-of-doc fields (supports inline and next-line values)
     fm = parse_front_matter(front_text)
 
+    size_bytes, mtime_epoch = file_fingerprint(pdf_path)
     source_hash = sha256_file(pdf_path)
 
-    # Idempotency: if existing submission for same content, update its metadata and return
-    with open_session(db_path) as session:
-        existing = find_submission_by_hash(session, source_hash)
-        if existing:
-            # Update metadata fields if newly parsed values are present
-            updated = False
-            update_fields = {
-                "identifier": fm.get("identifier"),
-                "as_of": fm.get("as_of"),
-                "expires_on": fm.get("expires_on"),
-                "service_requested": fm.get("service_requested"),
-                "requester": fm.get("requester"),
-                "requester_email": fm.get("requester_email"),
-                "phone": fm.get("phone"),
-                "lab": fm.get("lab"),
-                "billing_address": fm.get("billing_address"),
-                "pis": fm.get("pis"),
-                "financial_contacts": fm.get("financial_contacts"),
-                "request_summary": fm.get("request_summary"),
-                "forms_text": fm.get("forms_text"),
-                "will_submit_dna_for_json": fm.get("will_submit_dna_for_json"),
-                "type_of_sample_json": fm.get("type_of_sample_json"),
-                "human_dna": fm.get("human_dna"),
-                "source_organism": fm.get("source_organism"),
-                "sample_buffer_json": fm.get("sample_buffer_json"),
-            }
-            for key, value in update_fields.items():
-                if value and getattr(existing, key) != value:
-                    setattr(existing, key, value)
+    # Idempotency: if not forcing, update existing submission for same content and return
+    if not force:
+        with open_session(db_path) as session:
+            existing = find_submission_by_hash(session, source_hash)
+            if existing:
+                updated = False
+                update_fields = {
+                    "identifier": fm.get("identifier"),
+                    "as_of": fm.get("as_of"),
+                    "expires_on": fm.get("expires_on"),
+                    "service_requested": fm.get("service_requested"),
+                    "requester": fm.get("requester"),
+                    "requester_email": fm.get("requester_email"),
+                    "phone": fm.get("phone"),
+                    "lab": fm.get("lab"),
+                    "billing_address": fm.get("billing_address"),
+                    "pis": fm.get("pis"),
+                    "financial_contacts": fm.get("financial_contacts"),
+                    "request_summary": fm.get("request_summary"),
+                    "forms_text": fm.get("forms_text"),
+                    "will_submit_dna_for_json": fm.get("will_submit_dna_for_json"),
+                    "type_of_sample_json": fm.get("type_of_sample_json"),
+                    "human_dna": fm.get("human_dna"),
+                    "source_organism": fm.get("source_organism"),
+                    "sample_buffer_json": fm.get("sample_buffer_json"),
+                }
+                for key, value in update_fields.items():
+                    if value and getattr(existing, key) != value:
+                        setattr(existing, key, value)
+                        updated = True
+                if existing.source_size != size_bytes:
+                    existing.source_size = size_bytes
                     updated = True
-            if updated:
-                session.add(existing)
-                session.commit()
-            # Count samples
-            from sqlmodel import select
-            count = len(list(session.exec(select(Sample).where(Sample.submission_id == existing.id))))
-            return SlurpResult(submission_id=existing.id, num_samples=count)
+                if existing.source_mtime != mtime_epoch:
+                    existing.source_mtime = mtime_epoch
+                    updated = True
+                if updated:
+                    session.add(existing)
+                    session.commit()
+                from sqlmodel import select
+                count = len(list(session.exec(select(Sample).where(Sample.submission_id == existing.id))))
+                return SlurpResult(submission_id=existing.id, num_samples=count)
 
     submission = Submission(
         id=_generate_id("sub"),
@@ -168,6 +241,8 @@ def slurp_pdf(pdf_path: Path, db_path: Optional[Path] = None, pages: Optional[st
         producer=metadata.get("producer"),
         creation_date=metadata.get("creationDate"),
         page_count=page_count,
+        source_size=size_bytes,
+        source_mtime=mtime_epoch,
         identifier=fm.get("identifier"),
         as_of=fm.get("as_of"),
         expires_on=fm.get("expires_on"),

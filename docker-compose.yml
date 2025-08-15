@@ -1,0 +1,121 @@
+version: '3.8'
+
+services:
+  # New modular API
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.v2
+      args:
+        BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+        VCS_REF: ${VCS_REF:-$(git rev-parse --short HEAD)}
+        VERSION: ${VERSION:-2.0.0}
+    container_name: pdf-slurper-api
+    ports:
+      - "8080:8080"
+    environment:
+      - PDF_SLURPER_ENV=development
+      - PDF_SLURPER_USE_NEW=true
+      - PDF_SLURPER_HOST=0.0.0.0
+      - PDF_SLURPER_PORT=8080
+      - DATABASE_URL=sqlite:////app/data/pdf_slurper.db
+      - LOG_LEVEL=INFO
+      - API_DOCS_ENABLED=true
+      - API_CORS_ORIGINS=["http://localhost:3000", "http://localhost:8080"]
+    volumes:
+      - ./data:/app/data
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+      - ./:/app:ro  # Mount source for development
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    networks:
+      - pdf-slurper-network
+    restart: unless-stopped
+
+  # Legacy web UI (can be removed once migrated)
+  legacy-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pdf-slurper-legacy
+    ports:
+      - "8000:8000"
+    environment:
+      - PDF_SLURPER_USE_NEW=false
+    volumes:
+      - ./data:/app/data
+      - ./uploads:/app/uploads
+    command: ["python", "-m", "pdf_slurper.server"]
+    networks:
+      - pdf-slurper-network
+    profiles:
+      - legacy  # Only start with --profile legacy
+
+  # PostgreSQL for production-like testing
+  postgres:
+    image: postgres:15-alpine
+    container_name: pdf-slurper-db
+    environment:
+      - POSTGRES_USER=pdfslurper
+      - POSTGRES_PASSWORD=changeme
+      - POSTGRES_DB=pdfslurper
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pdfslurper"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pdf-slurper-network
+    profiles:
+      - postgres  # Only start with --profile postgres
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: pdf-slurper-cache
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pdf-slurper-network
+    profiles:
+      - cache  # Only start with --profile cache
+
+  # Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: pdf-slurper-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - api
+    networks:
+      - pdf-slurper-network
+    profiles:
+      - proxy  # Only start with --profile proxy
+
+networks:
+  pdf-slurper-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
