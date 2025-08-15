@@ -95,17 +95,28 @@ async def create_submission_from_upload(
             if temp_path.exists():
                 os.unlink(temp_path)
         
+        # Get actual sample count from legacy database
+        from pdf_slurper.db import open_session, Sample as LegacySample
+        from sqlmodel import select, func
+        
+        with open_session() as session:
+            sample_count = session.exec(
+                select(func.count()).select_from(LegacySample).where(
+                    LegacySample.submission_id == submission.id
+                )
+            ).one()
+        
         # Convert to response schema
         return SubmissionResponse(
             id=submission.id,
             created_at=submission.created_at,
-            updated_at=submission.updated_at,
-            sample_count=submission.sample_count,
+            updated_at=submission.updated_at if hasattr(submission, 'updated_at') else submission.created_at,
+            sample_count=sample_count,
             metadata=SubmissionMetadataResponse(
                 identifier=submission.metadata.identifier,
                 service_requested=submission.metadata.service_requested,
                 requester=submission.metadata.requester,
-                requester_email=submission.metadata.requester_email.value if submission.metadata.requester_email else None,
+                requester_email=submission.metadata.requester_email if submission.metadata.requester_email else None,
                 lab=submission.metadata.lab,
                 organism=submission.metadata.organism.full_name if submission.metadata.organism else None,
                 contains_human_dna=submission.metadata.contains_human_dna
@@ -206,7 +217,7 @@ async def list_submissions(
                     identifier=submission.metadata.identifier,
                     service_requested=submission.metadata.service_requested,
                     requester=submission.metadata.requester,
-                    requester_email=submission.metadata.requester_email.value if submission.metadata.requester_email else None,
+                    requester_email=submission.metadata.requester_email if submission.metadata.requester_email else None,
                     lab=submission.metadata.lab,
                     organism=submission.metadata.organism.full_name if submission.metadata.organism else None,
                     contains_human_dna=submission.metadata.contains_human_dna
@@ -240,26 +251,78 @@ async def get_submission(
 ) -> SubmissionResponse:
     """Get submission by ID."""
     try:
+        # Try to get from v2 service first
         submission = await container.submission_service.get_by_id(
             SubmissionId(submission_id)
         )
         
+        # If not found, try legacy database
         if not submission:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Submission not found: {submission_id}"
-            )
+            from pdf_slurper.db import open_session, Submission as LegacySubmission, Sample as LegacySample
+            from sqlmodel import select, func
+            
+            with open_session() as session:
+                legacy_sub = session.exec(
+                    select(LegacySubmission).where(LegacySubmission.id == submission_id)
+                ).first()
+                
+                if not legacy_sub:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Submission not found: {submission_id}"
+                    )
+                
+                # Get sample count
+                sample_count = session.exec(
+                    select(func.count()).select_from(LegacySample).where(
+                        LegacySample.submission_id == legacy_sub.id
+                    )
+                ).one()
+                
+                # Return legacy submission as response
+                return SubmissionResponse(
+                    id=legacy_sub.id,
+                    created_at=legacy_sub.created_at,
+                    updated_at=legacy_sub.created_at,  # Legacy doesn't have updated_at
+                    sample_count=sample_count,
+                    metadata=SubmissionMetadataResponse(
+                        identifier=legacy_sub.identifier,
+                        service_requested=legacy_sub.service_requested,
+                        requester=legacy_sub.requester,
+                        requester_email=legacy_sub.requester_email,
+                        lab=legacy_sub.lab,
+                        organism=legacy_sub.source_organism,
+                        contains_human_dna=legacy_sub.human_dna == "Yes" if legacy_sub.human_dna else None
+                    ),
+                    pdf_source={
+                        "file_path": legacy_sub.source_file,
+                        "file_hash": legacy_sub.source_sha256,
+                        "page_count": legacy_sub.page_count
+                    }
+                )
+        
+        # Return v2 submission
+        # Get sample count from legacy database if needed
+        from pdf_slurper.db import open_session, Sample as LegacySample
+        from sqlmodel import select, func
+        
+        with open_session() as session:
+            sample_count = session.exec(
+                select(func.count()).select_from(LegacySample).where(
+                    LegacySample.submission_id == submission.id
+                )
+            ).one()
         
         return SubmissionResponse(
             id=submission.id,
             created_at=submission.created_at,
-            updated_at=submission.updated_at,
-            sample_count=submission.sample_count,
+            updated_at=submission.created_at,  # Use created_at since updated_at doesn't exist
+            sample_count=sample_count,
             metadata=SubmissionMetadataResponse(
                 identifier=submission.metadata.identifier,
                 service_requested=submission.metadata.service_requested,
                 requester=submission.metadata.requester,
-                requester_email=submission.metadata.requester_email.value if submission.metadata.requester_email else None,
+                requester_email=submission.metadata.requester_email if submission.metadata.requester_email else None,
                 lab=submission.metadata.lab,
                 organism=submission.metadata.organism.full_name if submission.metadata.organism else None,
                 contains_human_dna=submission.metadata.contains_human_dna
@@ -272,6 +335,53 @@ async def get_submission(
         )
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/{submission_id}/samples",
+    summary="Get samples for submission",
+    description="Retrieve all samples for a submission"
+)
+async def get_submission_samples(
+    submission_id: str,
+    limit: int = Query(100, ge=1, le=1000, description="Maximum results"),
+    offset: int = Query(0, ge=0, description="Results offset"),
+    container: Container = Depends(get_container_dependency)
+):
+    """Get samples for a submission."""
+    try:
+        # Get samples from legacy database
+        from pdf_slurper.db import open_session, Sample as LegacySample
+        from sqlmodel import select
+        
+        with open_session() as session:
+            stmt = select(LegacySample).where(
+                LegacySample.submission_id == submission_id
+            ).offset(offset).limit(limit)
+            
+            samples = session.exec(stmt).all()
+            
+            # Convert to response format
+            sample_list = []
+            for sample in samples:
+                sample_list.append({
+                    "id": sample.id,
+                    "name": sample.name,
+                    "volume_ul": sample.volume_ul,
+                    "qubit_ng_per_ul": sample.qubit_ng_per_ul,
+                    "nanodrop_ng_per_ul": sample.nanodrop_ng_per_ul,
+                    "a260_a280": sample.a260_a280,
+                    "a260_a230": sample.a260_a230,
+                    "status": "pending",  # Default status
+                    "row_index": sample.row_index,
+                    "table_index": sample.table_index,
+                    "page_index": sample.page_index
+                })
+            
+            return {"items": sample_list, "total": len(sample_list)}
+            
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
