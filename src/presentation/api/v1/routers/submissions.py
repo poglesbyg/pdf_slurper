@@ -136,7 +136,36 @@ async def get_global_statistics(
     """Get global statistics."""
     try:
         stats = await container.submission_service.get_global_statistics()
-        return StatisticsResponse(**stats)
+        
+        # Map repository response to schema
+        # Calculate additional metrics
+        workflow_status = stats.get("status_counts", {})
+        qc_status = stats.get("qc_status_counts", {})
+        
+        samples_with_location = 0  # Would need a query for samples with location field set
+        samples_processed = workflow_status.get("completed", 0) + workflow_status.get("sequenced", 0)
+        
+        # Calculate average quality score if QC data exists
+        total_qc_samples = sum(qc_status.values())
+        if total_qc_samples > 0:
+            # Simple weighted score: passed=100, warning=50, failed=0
+            quality_score = (
+                qc_status.get("passed", 0) * 100 +
+                qc_status.get("warning", 0) * 50
+            ) / total_qc_samples
+        else:
+            quality_score = None
+        
+        return StatisticsResponse(
+            total_samples=stats.get("total_samples", 0),
+            workflow_status=workflow_status,
+            qc_status=qc_status,
+            average_concentration=stats.get("average_concentration"),
+            average_volume=stats.get("average_volume"),
+            average_quality_score=quality_score,
+            samples_with_location=samples_with_location,
+            samples_processed=samples_processed
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

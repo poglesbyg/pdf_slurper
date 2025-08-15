@@ -1,0 +1,22 @@
+[
+  {
+    "fileName": "main-overview.mdc",
+    "description": "Complete system overview detailing the PDF processing pipeline architecture, key components, and how they interact to extract and process laboratory sample data"
+  },
+  {
+    "fileName": "pdf-processing-algorithms.mdc",
+    "description": "Detailed documentation of the PDF parsing algorithms including metadata extraction, table detection, header normalization, and data transformation processes implemented in slurp.py"
+  },
+  {
+    "fileName": "data-models-relationships.mdc",
+    "description": "Comprehensive documentation of the Submission and Sample data models, their attributes, relationships, and lifecycle states implemented in domain/models/"
+  },
+  {
+    "fileName": "qc-algorithms.mdc",
+    "description": "Documentation of the Quality Control algorithms including threshold calculations, quality scoring formulas, and batch processing logic implemented across multiple components"
+  },
+  {
+    "fileName": "data-flow.mdc",
+    "description": "End-to-end data flow documentation showing how data moves from PDF upload through extraction, transformation, QC processing, and storage with sequence diagrams"
+  }
+]

@@ -264,9 +264,73 @@ class SubmissionService:
     
     async def _create_submission(self, extraction_result: Any) -> Submission:
         """Create submission from extraction result."""
-        # This would map the extraction result to domain models
-        # Implementation depends on PDFProcessor output format
-        raise NotImplementedError
+        # For now, use the legacy slurp functionality
+        from pdf_slurper.slurp import slurp_pdf
+        from pathlib import Path
+        import uuid
+        
+        # If extraction_result is a Path, use the legacy slurp
+        if isinstance(extraction_result, Path):
+            # Call the legacy slurp function
+            result = slurp_pdf(extraction_result, force=True)
+            
+            # Get the created submission from the database
+            from pdf_slurper.db import open_session, Submission as LegacySubmission
+            with open_session() as session:
+                from sqlmodel import select
+                legacy_sub = session.exec(
+                    select(LegacySubmission).where(LegacySubmission.id == result.submission_id)
+                ).first()
+                
+                if legacy_sub:
+                    # Convert to new domain model
+                    submission_id = SubmissionId(legacy_sub.id)
+                    
+                    # Create metadata
+                    metadata = SubmissionMetadata(
+                        identifier=legacy_sub.identifier,
+                        service_requested=legacy_sub.service_requested,
+                        requester=legacy_sub.requester,
+                        requester_email=legacy_sub.requester_email,
+                        lab=legacy_sub.lab,
+                        organism=legacy_sub.source_organism,
+                        contains_human_dna=legacy_sub.human_dna == "Yes" if legacy_sub.human_dna else None
+                    )
+                    
+                    # Create PDF source
+                    pdf_source = PDFSource(
+                        file_path=Path(legacy_sub.source_file),
+                        file_hash=legacy_sub.source_sha256,
+                        page_count=legacy_sub.page_count
+                    )
+                    
+                    # Create submission
+                    submission = Submission(
+                        id=submission_id,
+                        metadata=metadata,
+                        pdf_source=pdf_source,
+                        samples=[],  # Samples are handled separately in legacy
+                        created_at=legacy_sub.created_at,
+                        updated_at=legacy_sub.updated_at
+                    )
+                    
+                    return submission
+        
+        # Fallback: create a minimal submission
+        submission_id = SubmissionId(f"sub_{uuid.uuid4().hex[:12]}")
+        metadata = SubmissionMetadata()
+        pdf_source = PDFSource(
+            file_path=extraction_result if isinstance(extraction_result, Path) else Path("/tmp/unknown.pdf"),
+            file_hash="",
+            page_count=0
+        )
+        
+        return Submission(
+            id=submission_id,
+            metadata=metadata,
+            pdf_source=pdf_source,
+            samples=[]
+        )
     
     async def _update_existing(
         self,

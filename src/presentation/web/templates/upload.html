@@ -48,7 +48,7 @@
                             @change="handleFileSelect($event)"
                             accept=".pdf"
                             class="hidden"
-                            id="file-input">
+                            x-ref="fileInput">
                         <button 
                             type="button"
                             @click="$refs.fileInput.click()"
@@ -64,8 +64,8 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                             </svg>
                             <div class="text-left">
-                                <p class="text-sm font-medium text-gray-900" x-text="selectedFile.name"></p>
-                                <p class="text-xs text-gray-500" x-text="formatFileSize(selectedFile.size)"></p>
+                                <p class="text-sm font-medium text-gray-900" x-text="selectedFile?.name || ''"></p>
+                                <p class="text-xs text-gray-500" x-text="selectedFile ? formatFileSize(selectedFile.size) : ''"></p>
                             </div>
                         </div>
                         <button 
@@ -214,23 +214,23 @@
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div class="bg-blue-50 p-4 rounded-lg">
                 <p class="text-sm font-medium text-blue-800">Submission ID</p>
-                <p class="text-lg font-semibold text-blue-900" x-text="result.submission_id"></p>
+                <p class="text-lg font-semibold text-blue-900" x-text="result?.id || ''"></p>
             </div>
             
             <div class="bg-green-50 p-4 rounded-lg">
                 <p class="text-sm font-medium text-green-800">Samples Extracted</p>
-                <p class="text-lg font-semibold text-green-900" x-text="result.num_samples"></p>
+                <p class="text-lg font-semibold text-green-900" x-text="result?.sample_count || 0"></p>
             </div>
             
             <div class="bg-purple-50 p-4 rounded-lg">
                 <p class="text-sm font-medium text-purple-800">Processing Time</p>
-                <p class="text-lg font-semibold text-purple-900" x-text="result.processing_time + 's'"></p>
+                <p class="text-lg font-semibold text-purple-900" x-text="result ? (result.processing_time + 's') : ''"></p>
             </div>
         </div>
         
         <div class="mt-4 flex space-x-3">
             <a 
-                :href="'/submission/' + result.submission_id"
+                :href="result ? ('/submission/' + result.id) : '#'"
                 class="btn-primary">
                 View Submission
             </a>
@@ -331,7 +331,7 @@ function uploadForm() {
                     processing_time: processingTime
                 };
                 
-                showFlash('PDF processed successfully!', 'success');
+                showFlash(`PDF processed successfully! ${result.sample_count} samples extracted.`, 'success');
                 
             } catch (error) {
                 showFlash('Failed to process PDF: ' + error.message, 'error');
@@ -363,13 +363,17 @@ function uploadForm() {
         },
         
         async downloadManifest() {
+            if (!this.result || !this.result.id) {
+                showFlash('No submission to download', 'error');
+                return;
+            }
             try {
-                const response = await fetch(`http://localhost:8080/api/v1/submissions/${this.result.submission_id}/manifest`);
+                const response = await fetch(`http://localhost:8080/api/v1/submissions/${this.result.id}/manifest`);
                 const blob = await response.blob();
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `manifest-${this.result.submission_id}.csv`;
+                a.download = `manifest-${this.result.id}.csv`;
                 document.body.appendChild(a);
                 a.click();
                 window.URL.revokeObjectURL(url);
