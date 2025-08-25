@@ -123,7 +123,7 @@ items:
         spec:
           containers:
             - name: pdf-slurper-api
-              image: image-registry.openshift-image-registry.svc:5000/pdf-slurper/pdf-slurper:latest
+              image: image-registry.openshift-image-registry.svc:5000/dept-barc/pdf-slurper:v2
               imagePullPolicy: Always
               ports:
                 - containerPort: 8080
@@ -189,17 +189,17 @@ items:
         spec:
           containers:
             - name: pdf-slurper-web
-              image: image-registry.openshift-image-registry.svc:5000/pdf-slurper/pdf-slurper-web:latest
+              image: image-registry.openshift-image-registry.svc:5000/dept-barc/pdf-slurper-web:latest
               imagePullPolicy: Always
               ports:
                 - containerPort: 8080
                   protocol: TCP
               resources:
                 requests:
-                  memory: "32Mi"
+                  memory: "64Mi"  # Minimum 40Mi required by namespace
                   cpu: "60m"
                 limits:
-                  memory: "64Mi"
+                  memory: "128Mi"
                   cpu: "100m"
               livenessProbe:
                 httpGet:
