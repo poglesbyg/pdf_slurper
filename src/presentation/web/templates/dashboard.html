@@ -206,12 +206,12 @@ function dashboard() {
         async loadData() {
             try {
                 // Load global statistics
-                const statsResponse = await fetch('http://localhost:8080/api/v1/submissions/statistics');
+                const statsResponse = await fetch('/api/v1/submissions/statistics');
                 if (!statsResponse.ok) throw new Error('Failed to load statistics');
                 this.stats = await statsResponse.json();
                 
                 // Load recent submissions
-                const submissionsResponse = await fetch('http://localhost:8080/api/v1/submissions/?limit=10');
+                const submissionsResponse = await fetch('/api/v1/submissions/?limit=10');
                 if (!submissionsResponse.ok) throw new Error('Failed to load submissions');
                 const submissionsData = await submissionsResponse.json();
                 this.recentSubmissions = submissionsData.items || [];

@@ -313,7 +313,7 @@ function uploadForm() {
                 }
                 
                 // Submit to API
-                const response = await fetch('http://localhost:8080/api/v1/submissions/', {
+                const response = await fetch('/api/v1/submissions/', {
                     method: 'POST',
                     body: formData
                 });
@@ -368,7 +368,7 @@ function uploadForm() {
                 return;
             }
             try {
-                const response = await fetch(`http://localhost:8080/api/v1/submissions/${this.result.id}/manifest`);
+                const response = await fetch(`/api/v1/submissions/${this.result.id}/manifest`);
                 const blob = await response.blob();
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');

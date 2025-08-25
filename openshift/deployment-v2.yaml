@@ -48,8 +48,7 @@ items:
         - ReadWriteOnce
       resources:
         requests:
-          storage: 10Gi
-      storageClassName: standard
+          storage: 1Gi
 
   # BuildConfig for building the image
   - apiVersion: build.openshift.io/v1
@@ -102,7 +101,7 @@ items:
         app: pdf-slurper
         version: v2
     spec:
-      replicas: 2
+      replicas: 1
       revisionHistoryLimit: 3
       selector:
         matchLabels:
@@ -125,7 +124,7 @@ items:
         spec:
           containers:
             - name: pdf-slurper
-              image: pdf-slurper:v2
+              image: image-registry.openshift-image-registry.svc:5000/dept-barc/pdf-slurper:v2
               imagePullPolicy: Always
               ports:
                 - containerPort: 8080
@@ -138,18 +137,18 @@ items:
                     name: pdf-slurper-secret
               volumeMounts:
                 - name: data
-                  mountPath: /app/data
+                  mountPath: /data
                 - name: uploads
                   mountPath: /app/uploads
                 - name: logs
                   mountPath: /app/logs
               resources:
                 requests:
-                  memory: "256Mi"
-                  cpu: "100m"
+                  memory: "64Mi"
+                  cpu: "60m"  # Minimum required by namespace policy
                 limits:
-                  memory: "1Gi"
-                  cpu: "500m"
+                  memory: "128Mi"
+                  cpu: "200m"
               livenessProbe:
                 httpGet:
                   path: /health
@@ -182,10 +181,7 @@ items:
               emptyDir: {}
             - name: logs
               emptyDir: {}
-          securityContext:
-            runAsNonRoot: true
-            runAsUser: 1000
-            fsGroup: 1000
+          # securityContext removed - OpenShift will apply its default security context
 
   # Service
   - apiVersion: v1
@@ -220,7 +216,7 @@ items:
         haproxy.router.openshift.io/timeout: 60s
         haproxy.router.openshift.io/hsts_header: "max-age=31536000;includeSubDomains;preload"
     spec:
-      host: pdf-slurper-v2.apps.cloudapps.unc.edu
+      host: pdf-slurper-v2-dept-barc.apps.cloudapps.unc.edu
       path: /
       to:
         kind: Service
@@ -245,8 +241,8 @@ items:
         apiVersion: apps/v1
         kind: Deployment
         name: pdf-slurper-v2
-      minReplicas: 2
-      maxReplicas: 10
+      minReplicas: 1
+      maxReplicas: 3
       metrics:
         - type: Resource
           resource:

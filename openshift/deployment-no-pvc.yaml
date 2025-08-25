@@ -1,0 +1,171 @@
+apiVersion: v1
+kind: List
+metadata:
+  name: pdf-slurper-no-pvc
+items:
+  # ConfigMap for application configuration
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: pdf-slurper-config
+      labels:
+        app: pdf-slurper
+        version: v2
+    data:
+      PDF_SLURPER_ENV: "production"
+      PDF_SLURPER_USE_NEW: "true"
+      PDF_SLURPER_HOST: "0.0.0.0"
+      PDF_SLURPER_PORT: "8080"
+      LOG_LEVEL: "INFO"
+      API_DOCS_ENABLED: "false"
+      QC_AUTO_APPLY: "false"
+      WORKERS: "2"  # Reduced workers
+      WEB_PORT: "8080"  # Use same port for web UI
+
+  # Secret for sensitive data
+  - apiVersion: v1
+    kind: Secret
+    metadata:
+      name: pdf-slurper-secret
+      labels:
+        app: pdf-slurper
+        version: v2
+    type: Opaque
+    stringData:
+      DATABASE_URL: "sqlite:////tmp/data/pdf_slurper.db"  # Using temp storage
+      API_KEY: "changeme-secure-api-key-replace-in-production"
+      JWT_SECRET: "changeme-secure-jwt-secret-replace-in-production"
+
+  # ImageStream for the built image
+  - apiVersion: image.openshift.io/v1
+    kind: ImageStream
+    metadata:
+      name: pdf-slurper
+      labels:
+        app: pdf-slurper
+    spec:
+      lookupPolicy:
+        local: true
+
+  # Deployment without PVC
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: pdf-slurper-v2
+      labels:
+        app: pdf-slurper
+        version: v2
+    spec:
+      replicas: 1
+      revisionHistoryLimit: 2  # Reduce history
+      selector:
+        matchLabels:
+          app: pdf-slurper
+          version: v2
+      strategy:
+        type: RollingUpdate
+        rollingUpdate:
+          maxSurge: 0  # Don't create extra pods during update
+          maxUnavailable: 1
+      template:
+        metadata:
+          labels:
+            app: pdf-slurper
+            version: v2
+        spec:
+          containers:
+            - name: pdf-slurper
+              image: image-registry.openshift-image-registry.svc:5000/dept-barc/pdf-slurper:v2
+              imagePullPolicy: IfNotPresent  # Don't always pull
+              # Use default command from Dockerfile (run_api.py)
+              ports:
+                - containerPort: 8080
+                  protocol: TCP
+                  name: http
+              envFrom:
+                - configMapRef:
+                    name: pdf-slurper-config
+                - secretRef:
+                    name: pdf-slurper-secret
+              volumeMounts:
+                - name: data
+                  mountPath: /tmp/data
+                - name: uploads
+                  mountPath: /app/uploads
+                - name: logs
+                  mountPath: /app/logs
+              resources:
+                requests:
+                  memory: "64Mi"
+                  cpu: "60m"  # Minimum required by namespace policy
+                limits:
+                  memory: "128Mi"  # Minimal memory to fit quota
+                  cpu: "200m"
+              livenessProbe:
+                httpGet:
+                  path: /health
+                  port: 8080
+                initialDelaySeconds: 30
+                periodSeconds: 60  # Less frequent checks
+                timeoutSeconds: 5
+                failureThreshold: 3
+              readinessProbe:
+                httpGet:
+                  path: /ready
+                  port: 8080
+                initialDelaySeconds: 10
+                periodSeconds: 20
+                timeoutSeconds: 5
+                failureThreshold: 3
+          volumes:
+            - name: data
+              emptyDir:
+                sizeLimit: 500Mi  # Limited temp storage
+            - name: uploads
+              emptyDir:
+                sizeLimit: 200Mi
+            - name: logs
+              emptyDir:
+                sizeLimit: 100Mi
+          # No security context - OpenShift will apply its defaults
+
+  # Service
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: pdf-slurper-v2
+      labels:
+        app: pdf-slurper
+        version: v2
+    spec:
+      type: ClusterIP
+      ports:
+        - port: 8080
+          targetPort: 8080
+          protocol: TCP
+          name: http
+      selector:
+        app: pdf-slurper
+        version: v2
+
+  # Route with TLS
+  - apiVersion: route.openshift.io/v1
+    kind: Route
+    metadata:
+      name: pdf-slurper-v2
+      labels:
+        app: pdf-slurper
+        version: v2
+      annotations:
+        haproxy.router.openshift.io/timeout: 60s
+    spec:
+      host: pdf-slurper-v2-dept-barc.apps.cloudapps.unc.edu
+      to:
+        kind: Service
+        name: pdf-slurper-v2
+        weight: 100
+      port:
+        targetPort: http
+      tls:
+        termination: edge
+        insecureEdgeTerminationPolicy: Redirect

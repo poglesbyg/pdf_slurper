@@ -136,7 +136,7 @@
         }
 
         // API utilities
-        const API_BASE = 'http://localhost:8080/api/v1';
+        const API_BASE = '/api/v1';  // Use relative path for production
         
         async function apiCall(endpoint, options = {}) {
             try {

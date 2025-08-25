@@ -1,0 +1,272 @@
+apiVersion: v1
+kind: List
+metadata:
+  name: pdf-slurper-combined
+items:
+  # ConfigMap for application configuration
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: pdf-slurper-config
+      labels:
+        app: pdf-slurper
+        version: v2
+    data:
+      PDF_SLURPER_ENV: "production"
+      PDF_SLURPER_USE_NEW: "true"
+      PDF_SLURPER_HOST: "0.0.0.0"
+      PDF_SLURPER_PORT: "8080"
+      LOG_LEVEL: "INFO"
+      API_DOCS_ENABLED: "true"
+      QC_AUTO_APPLY: "false"
+      WORKERS: "2"
+
+  # Secret for sensitive data
+  - apiVersion: v1
+    kind: Secret
+    metadata:
+      name: pdf-slurper-secret
+      labels:
+        app: pdf-slurper
+        version: v2
+    type: Opaque
+    stringData:
+      DATABASE_URL: "sqlite:////tmp/data/pdf_slurper.db"
+      API_KEY: "changeme-secure-api-key-replace-in-production"
+      JWT_SECRET: "changeme-secure-jwt-secret-replace-in-production"
+
+  # ImageStream for API image
+  - apiVersion: image.openshift.io/v1
+    kind: ImageStream
+    metadata:
+      name: pdf-slurper
+      labels:
+        app: pdf-slurper
+    spec:
+      lookupPolicy:
+        local: true
+
+  # ImageStream for Web UI image
+  - apiVersion: image.openshift.io/v1
+    kind: ImageStream
+    metadata:
+      name: pdf-slurper-web
+      labels:
+        app: pdf-slurper
+    spec:
+      lookupPolicy:
+        local: true
+
+  # BuildConfig for API image
+  - apiVersion: build.openshift.io/v1
+    kind: BuildConfig
+    metadata:
+      name: pdf-slurper-api
+      labels:
+        app: pdf-slurper
+    spec:
+      output:
+        to:
+          kind: ImageStreamTag
+          name: pdf-slurper:latest
+      source:
+        type: Binary
+      strategy:
+        type: Docker
+        dockerStrategy:
+          dockerfilePath: Dockerfile.v2
+      triggers:
+        - type: ConfigChange
+
+  # BuildConfig for Web UI image
+  - apiVersion: build.openshift.io/v1
+    kind: BuildConfig
+    metadata:
+      name: pdf-slurper-web
+      labels:
+        app: pdf-slurper
+    spec:
+      output:
+        to:
+          kind: ImageStreamTag
+          name: pdf-slurper-web:latest
+      source:
+        type: Binary
+      strategy:
+        type: Docker
+        dockerStrategy:
+          dockerfilePath: Dockerfile.web
+      triggers:
+        - type: ConfigChange
+
+  # Deployment for API
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: pdf-slurper-v2
+      labels:
+        app: pdf-slurper
+        component: api
+        version: v2
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: pdf-slurper
+          component: api
+      template:
+        metadata:
+          labels:
+            app: pdf-slurper
+            component: api
+            version: v2
+        spec:
+          containers:
+            - name: pdf-slurper-api
+              image: image-registry.openshift-image-registry.svc:5000/pdf-slurper/pdf-slurper:latest
+              imagePullPolicy: Always
+              ports:
+                - containerPort: 8080
+                  protocol: TCP
+              envFrom:
+                - configMapRef:
+                    name: pdf-slurper-config
+                - secretRef:
+                    name: pdf-slurper-secret
+              volumeMounts:
+                - name: data
+                  mountPath: /tmp/data
+                - name: uploads
+                  mountPath: /app/uploads
+              resources:
+                requests:
+                  memory: "64Mi"
+                  cpu: "60m"
+                limits:
+                  memory: "128Mi"
+                  cpu: "200m"
+              livenessProbe:
+                httpGet:
+                  path: /health
+                  port: 8080
+                initialDelaySeconds: 30
+                periodSeconds: 30
+              readinessProbe:
+                httpGet:
+                  path: /ready
+                  port: 8080
+                initialDelaySeconds: 10
+                periodSeconds: 10
+          volumes:
+            - name: data
+              emptyDir:
+                sizeLimit: 500Mi
+            - name: uploads
+              emptyDir:
+                sizeLimit: 200Mi
+
+  # Deployment for Web UI
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: pdf-slurper-web
+      labels:
+        app: pdf-slurper
+        component: web
+        version: v2
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: pdf-slurper
+          component: web
+      template:
+        metadata:
+          labels:
+            app: pdf-slurper
+            component: web
+            version: v2
+        spec:
+          containers:
+            - name: pdf-slurper-web
+              image: image-registry.openshift-image-registry.svc:5000/pdf-slurper/pdf-slurper-web:latest
+              imagePullPolicy: Always
+              ports:
+                - containerPort: 8080
+                  protocol: TCP
+              resources:
+                requests:
+                  memory: "32Mi"
+                  cpu: "60m"
+                limits:
+                  memory: "64Mi"
+                  cpu: "100m"
+              livenessProbe:
+                httpGet:
+                  path: /dashboard.html
+                  port: 8080
+                initialDelaySeconds: 10
+                periodSeconds: 30
+              readinessProbe:
+                httpGet:
+                  path: /dashboard.html
+                  port: 8080
+                initialDelaySeconds: 5
+                periodSeconds: 10
+
+  # Service for API
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: pdf-slurper-v2
+      labels:
+        app: pdf-slurper
+        component: api
+    spec:
+      type: ClusterIP
+      ports:
+        - port: 8080
+          targetPort: 8080
+          protocol: TCP
+      selector:
+        app: pdf-slurper
+        component: api
+
+  # Service for Web UI
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: pdf-slurper-web
+      labels:
+        app: pdf-slurper
+        component: web
+    spec:
+      type: ClusterIP
+      ports:
+        - port: 8080
+          targetPort: 8080
+          protocol: TCP
+      selector:
+        app: pdf-slurper
+        component: web
+
+  # Route for Web UI (main entry point)
+  - apiVersion: route.openshift.io/v1
+    kind: Route
+    metadata:
+      name: pdf-slurper
+      labels:
+        app: pdf-slurper
+      annotations:
+        haproxy.router.openshift.io/timeout: 60s
+    spec:
+      host: pdf-slurper-dept-barc.apps.cloudapps.unc.edu
+      to:
+        kind: Service
+        name: pdf-slurper-web
+        weight: 100
+      port:
+        targetPort: 8080
+      tls:
+        termination: edge
+        insecureEdgeTerminationPolicy: Redirect

@@ -45,17 +45,17 @@ RUN python -m venv /app/venv && \
 # Production stage
 FROM python:3.11-slim
 
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    poppler-utils \
-    libglib2.0-0 \
-    libgomp1 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    libgl1-mesa-glx \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+    # Install runtime dependencies
+    RUN apt-get update && apt-get install -y --no-install-recommends \
+        poppler-utils \
+        libglib2.0-0 \
+        libgomp1 \
+        libsm6 \
+        libxext6 \
+        libxrender-dev \
+        libgl1 \
+        curl \
+        && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
 RUN groupadd -r pdfslurper && \
