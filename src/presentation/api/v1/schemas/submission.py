@@ -90,6 +90,7 @@ class SearchRequest(BaseModel):
 class StatisticsResponse(BaseModel):
     """Statistics response schema."""
     
+    total_submissions: int
     total_samples: int
     workflow_status: Dict[str, int]
     qc_status: Dict[str, int]

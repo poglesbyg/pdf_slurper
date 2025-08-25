@@ -3,7 +3,7 @@
 {% block title %}Dashboard - PDF Slurper v2{% endblock %}
 
 {% block content %}
-<div x-data="dashboard()" class="space-y-6">
+<div x-data="dashboard()" x-init="init()" class="space-y-6">
     <!-- Page Header -->
     <div class="bg-white shadow rounded-lg p-6">
         <div class="flex items-center justify-between">
@@ -41,7 +41,7 @@
                 </div>
                 <div class="ml-4">
                     <p class="text-sm font-medium text-gray-500">Total Submissions</p>
-                    <p class="text-2xl font-semibold text-gray-900" x-text="stats.total_submissions || '...'"></p>
+                    <p class="text-2xl font-semibold text-gray-900" x-text="stats.total_submissions || totalSubmissions || '0'"></p>
                 </div>
             </div>
         </div>
@@ -73,7 +73,7 @@
                 </div>
                 <div class="ml-4">
                     <p class="text-sm font-medium text-gray-500">QC Pending</p>
-                    <p class="text-2xl font-semibold text-gray-900" x-text="stats.qc_status_counts?.pending || '...'"></p>
+                    <p class="text-2xl font-semibold text-gray-900" x-text="stats.qc_status?.pending || '0'"></p>
                 </div>
             </div>
         </div>
@@ -183,6 +183,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 <script>
 function dashboard() {
     return {
@@ -190,86 +191,135 @@ function dashboard() {
         recentSubmissions: [],
         workflowChart: null,
         qcChart: null,
+        totalSubmissions: 0,
         
         async init() {
             await this.loadData();
+            await this.$nextTick(); // Wait for DOM updates
             this.setupCharts();
         },
         
         async loadData() {
             try {
                 // Load global statistics
-                const statsResponse = await apiCall('/submissions/statistics');
-                this.stats = statsResponse;
+                const statsResponse = await fetch('http://localhost:8080/api/v1/submissions/statistics');
+                if (!statsResponse.ok) throw new Error('Failed to load statistics');
+                this.stats = await statsResponse.json();
                 
                 // Load recent submissions
-                const submissionsResponse = await apiCall('/submissions?limit=10');
-                this.recentSubmissions = submissionsResponse.items || [];
+                const submissionsResponse = await fetch('http://localhost:8080/api/v1/submissions/?limit=10');
+                if (!submissionsResponse.ok) throw new Error('Failed to load submissions');
+                const submissionsData = await submissionsResponse.json();
+                this.recentSubmissions = submissionsData.items || [];
+                
+                // Get total submissions count from a full list (or could add a count endpoint)
+                const allSubmissionsResponse = await fetch('http://localhost:8080/api/v1/submissions/?limit=1000');
+                if (allSubmissionsResponse.ok) {
+                    const allData = await allSubmissionsResponse.json();
+                    this.totalSubmissions = allData.total || allData.items?.length || 0;
+                }
                 
             } catch (error) {
-                showFlash('Failed to load dashboard data: ' + error.message, 'error');
+                console.error('Dashboard error:', error);
+                // Use default values if API fails
+                this.stats = {
+                    total_samples: 0,
+                    workflow_status: {},
+                    qc_status: {},
+                    average_quality_score: null
+                };
+                this.recentSubmissions = [];
+                this.totalSubmissions = 0;
             }
         },
         
         setupCharts() {
+            // Destroy existing charts if they exist
+            if (this.workflowChart) {
+                this.workflowChart.destroy();
+                this.workflowChart = null;
+            }
+            if (this.qcChart) {
+                this.qcChart.destroy();
+                this.qcChart = null;
+            }
+            
             // Workflow Status Chart
-            const workflowCtx = document.getElementById('workflowChart').getContext('2d');
-            this.workflowChart = new Chart(workflowCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Received', 'Processing', 'Sequenced', 'Completed', 'Failed'],
-                    datasets: [{
-                        data: [
-                            this.stats.status_counts?.received || 0,
-                            this.stats.status_counts?.processing || 0,
-                            this.stats.status_counts?.sequenced || 0,
-                            this.stats.status_counts?.completed || 0,
-                            this.stats.status_counts?.failed || 0
-                        ],
-                        backgroundColor: [
-                            '#3B82F6', '#F59E0B', '#8B5CF6', '#10B981', '#EF4444'
-                        ]
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom'
+            const workflowCtx = document.getElementById('workflowChart');
+            if (workflowCtx) {
+                this.workflowChart = new Chart(workflowCtx.getContext('2d'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Received', 'Processing', 'Sequenced', 'Completed', 'Failed'],
+                        datasets: [{
+                            data: [
+                                this.stats.workflow_status?.received || 0,
+                                this.stats.workflow_status?.processing || 0,
+                                this.stats.workflow_status?.sequenced || 0,
+                                this.stats.workflow_status?.completed || 0,
+                                this.stats.workflow_status?.failed || 0
+                            ],
+                            backgroundColor: [
+                                '#3B82F6', '#F59E0B', '#8B5CF6', '#10B981', '#EF4444'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom'
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return context.label + ': ' + context.parsed;
+                                    }
+                                }
+                            }
                         }
                     }
-                }
-            });
+                });
+            }
             
             // QC Status Chart
-            const qcCtx = document.getElementById('qcChart').getContext('2d');
-            this.qcChart = new Chart(qcCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Pending', 'Passed', 'Warning', 'Failed'],
-                    datasets: [{
-                        data: [
-                            this.stats.qc_status_counts?.pending || 0,
-                            this.stats.qc_status_counts?.passed || 0,
-                            this.stats.qc_status_counts?.warning || 0,
-                            this.stats.qc_status_counts?.failed || 0
-                        ],
-                        backgroundColor: [
-                            '#6B7280', '#10B981', '#F59E0B', '#EF4444'
-                        ]
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom'
+            const qcCtx = document.getElementById('qcChart');
+            if (qcCtx) {
+                this.qcChart = new Chart(qcCtx.getContext('2d'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Pending', 'Passed', 'Warning', 'Failed'],
+                        datasets: [{
+                            data: [
+                                this.stats.qc_status?.pending || 0,
+                                this.stats.qc_status?.passed || 0,
+                                this.stats.qc_status?.warning || 0,
+                                this.stats.qc_status?.failed || 0
+                            ],
+                            backgroundColor: [
+                                '#6B7280', '#10B981', '#F59E0B', '#EF4444'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom'
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return context.label + ': ' + context.parsed;
+                                    }
+                                }
+                            }
                         }
                     }
-                }
-            });
+                });
+            }
         },
         
         async refreshData() {
@@ -281,21 +331,21 @@ function dashboard() {
         updateCharts() {
             if (this.workflowChart) {
                 this.workflowChart.data.datasets[0].data = [
-                    this.stats.status_counts?.received || 0,
-                    this.stats.status_counts?.processing || 0,
-                    this.stats.status_counts?.sequenced || 0,
-                    this.stats.status_counts?.completed || 0,
-                    this.stats.status_counts?.failed || 0
+                    this.stats.workflow_status?.received || 0,
+                    this.stats.workflow_status?.processing || 0,
+                    this.stats.workflow_status?.sequenced || 0,
+                    this.stats.workflow_status?.completed || 0,
+                    this.stats.workflow_status?.failed || 0
                 ];
                 this.workflowChart.update();
             }
             
             if (this.qcChart) {
                 this.qcChart.data.datasets[0].data = [
-                    this.stats.qc_status_counts?.pending || 0,
-                    this.stats.qc_status_counts?.passed || 0,
-                    this.stats.qc_status_counts?.warning || 0,
-                    this.stats.qc_status_counts?.failed || 0
+                    this.stats.qc_status?.pending || 0,
+                    this.stats.qc_status?.passed || 0,
+                    this.stats.qc_status?.warning || 0,
+                    this.stats.qc_status?.failed || 0
                 ];
                 this.qcChart.update();
             }

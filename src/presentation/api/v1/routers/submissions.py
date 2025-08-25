@@ -150,11 +150,11 @@ async def get_global_statistics(
         
         # Map repository response to schema
         # Calculate additional metrics
-        workflow_status = stats.get("status_counts", {})
-        qc_status = stats.get("qc_status_counts", {})
+        workflow_status = stats.get("workflow_status", {})
+        qc_status = stats.get("qc_status", {})
         
-        samples_with_location = 0  # Would need a query for samples with location field set
-        samples_processed = workflow_status.get("completed", 0) + workflow_status.get("sequenced", 0)
+        samples_with_location = stats.get("samples_with_location", 0) 
+        samples_processed = stats.get("samples_processed", 0)
         
         # Calculate average quality score if QC data exists
         total_qc_samples = sum(qc_status.values())
@@ -168,6 +168,7 @@ async def get_global_statistics(
             quality_score = None
         
         return StatisticsResponse(
+            total_submissions=stats.get("total_submissions", 0),
             total_samples=stats.get("total_samples", 0),
             workflow_status=workflow_status,
             qc_status=qc_status,
@@ -197,6 +198,7 @@ async def list_submissions(
 ) -> SubmissionListResponse:
     """List submissions."""
     try:
+        # Try v2 service first
         submissions = await container.submission_service.search(
             query=query,
             requester_email=requester_email,
@@ -205,7 +207,62 @@ async def list_submissions(
             offset=offset
         )
         
-        # Convert to response schema
+        # If no v2 submissions, get from legacy database
+        if not submissions:
+            from pdf_slurper.db import open_session, Submission as LegacySubmission, Sample as LegacySample
+            from sqlmodel import select, func
+            
+            with open_session() as session:
+                stmt = select(LegacySubmission).order_by(LegacySubmission.created_at.desc())
+                if requester_email:
+                    stmt = stmt.where(LegacySubmission.requester_email == requester_email)
+                if lab:
+                    stmt = stmt.where(LegacySubmission.lab == lab)
+                stmt = stmt.offset(offset).limit(limit)
+                
+                legacy_submissions = session.exec(stmt).all()
+                
+                items = []
+                for legacy_sub in legacy_submissions:
+                    # Get sample count
+                    sample_count = session.exec(
+                        select(func.count()).select_from(LegacySample).where(
+                            LegacySample.submission_id == legacy_sub.id
+                        )
+                    ).one()
+                    
+                    items.append(SubmissionResponse(
+                        id=legacy_sub.id,
+                        created_at=legacy_sub.created_at,
+                        updated_at=legacy_sub.created_at,  # Legacy doesn't have updated_at
+                        sample_count=sample_count,
+                        metadata=SubmissionMetadataResponse(
+                            identifier=legacy_sub.identifier,
+                            service_requested=legacy_sub.service_requested,
+                            requester=legacy_sub.requester,
+                            requester_email=legacy_sub.requester_email,
+                            lab=legacy_sub.lab,
+                            organism=legacy_sub.source_organism,
+                            contains_human_dna=legacy_sub.human_dna == "Yes" if legacy_sub.human_dna else None
+                        ),
+                        pdf_source={
+                            "file_path": legacy_sub.source_file,
+                            "file_hash": legacy_sub.source_sha256,
+                            "page_count": legacy_sub.page_count
+                        }
+                    ))
+                
+                # Get total count
+                total = session.exec(select(func.count()).select_from(LegacySubmission)).one()
+                
+                return SubmissionListResponse(
+                    items=items,
+                    total=total,
+                    offset=offset,
+                    limit=limit
+                )
+        
+        # Convert v2 submissions to response schema
         items = []
         for submission in submissions:
             items.append(SubmissionResponse(

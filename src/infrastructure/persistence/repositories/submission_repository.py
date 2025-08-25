@@ -456,50 +456,92 @@ class SQLSubmissionRepository(SubmissionRepository):
             Statistics dictionary
         """
         with self.database.get_session() as session:
-            # Count submissions
-            submission_count = session.exec(
+            # Count v2 submissions  
+            submission_count_v2 = session.exec(
                 select(func.count()).select_from(SubmissionORM)
             ).one()
             
-            # Count samples
-            sample_count = session.exec(
+            # Count v2 samples
+            sample_count_v2 = session.exec(
                 select(func.count()).select_from(SampleORM)
             ).one()
             
-            # Count by status
+            # Also count legacy submissions and samples
+            from pdf_slurper.db import open_session, Submission as LegacySubmission, Sample as LegacySample
+            from sqlmodel import select as legacy_select, func as legacy_func
+            
+            with open_session() as legacy_session:
+                submission_count_legacy = legacy_session.exec(
+                    legacy_select(legacy_func.count()).select_from(LegacySubmission)
+                ).one()
+                
+                sample_count_legacy = legacy_session.exec(
+                    legacy_select(legacy_func.count()).select_from(LegacySample)
+                ).one()
+            
+            # Combine counts
+            submission_count = submission_count_v2 + submission_count_legacy
+            sample_count = sample_count_v2 + sample_count_legacy
+            
+            # Get workflow and QC status counts from legacy samples
             status_counts = {}
-            for status in ["received", "processing", "sequenced", "completed", "failed"]:
-                count = session.exec(
-                    select(func.count()).select_from(SampleORM).where(
-                        SampleORM.status == status
-                    )
-                ).one()
-                status_counts[status] = count
-            
-            # Count by QC status
             qc_counts = {}
-            for qc_status in ["pending", "passed", "warning", "failed"]:
-                count = session.exec(
-                    select(func.count()).select_from(SampleORM).where(
-                        SampleORM.qc_status == qc_status
+            
+            with open_session() as legacy_session:
+                # Count by workflow status from legacy samples (column is named 'status')
+                for status in ["received", "processing", "sequenced", "completed", "failed"]:
+                    count = legacy_session.exec(
+                        legacy_select(legacy_func.count()).select_from(LegacySample).where(
+                            LegacySample.status == status
+                        )
+                    ).one()
+                    status_counts[status] = count or 0
+                
+                # Count NULL status as 'pending'
+                null_status_count = legacy_session.exec(
+                    legacy_select(legacy_func.count()).select_from(LegacySample).where(
+                        LegacySample.status == None
                     )
                 ).one()
-                qc_counts[qc_status] = count
+                status_counts["pending"] = status_counts.get("pending", 0) + (null_status_count or 0)
+                
+                # Count by QC status from legacy samples
+                for qc_status in ["pending", "passed", "warning", "failed"]:
+                    count = legacy_session.exec(
+                        legacy_select(legacy_func.count()).select_from(LegacySample).where(
+                            LegacySample.qc_status == qc_status
+                        )
+                    ).one()
+                    qc_counts[qc_status] = count or 0
+                
+                # Count NULL qc_status as 'pending'
+                null_qc_count = legacy_session.exec(
+                    legacy_select(legacy_func.count()).select_from(LegacySample).where(
+                        LegacySample.qc_status == None
+                    )
+                ).one()
+                qc_counts["pending"] = qc_counts.get("pending", 0) + (null_qc_count or 0)
+                
+                # Calculate averages from legacy samples
+                avg_volume = legacy_session.exec(
+                    legacy_select(legacy_func.avg(LegacySample.volume_ul)).select_from(LegacySample)
+                ).one() or 0
+                
+                avg_concentration = legacy_session.exec(
+                    legacy_select(legacy_func.avg(LegacySample.qubit_ng_per_ul)).select_from(LegacySample)
+                ).one() or 0
             
-            # Average metrics
-            avg_volume = session.exec(
-                select(func.avg(SampleORM.volume_ul)).select_from(SampleORM)
-            ).one() or 0
-            
-            avg_concentration = session.exec(
-                select(func.avg(SampleORM.qubit_ng_per_ul)).select_from(SampleORM)
-            ).one() or 0
+            print(f"DEBUG: Final status_counts = {status_counts}")
+            print(f"DEBUG: Final qc_counts = {qc_counts}")
             
             return {
                 "total_submissions": submission_count,
                 "total_samples": sample_count,
-                "status_counts": status_counts,
-                "qc_status_counts": qc_counts,
-                "average_volume": float(avg_volume),
-                "average_concentration": float(avg_concentration)
+                "workflow_status": status_counts,  # Renamed to match frontend expectations
+                "qc_status": qc_counts,  # Renamed to match frontend expectations
+                "average_volume": float(avg_volume) if avg_volume else 0,
+                "average_concentration": float(avg_concentration) if avg_concentration else 0,
+                "average_quality_score": None,  # Would need to calculate this
+                "samples_with_location": 0,  # Would need to query for this
+                "samples_processed": status_counts.get("processing", 0) + status_counts.get("completed", 0) + status_counts.get("sequenced", 0)
             }
