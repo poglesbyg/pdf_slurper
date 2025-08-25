@@ -1,68 +1,53 @@
 ---
-description: Analyzes data flow from PDF upload through extraction, transformation, QC, and storage
+description: Documents data flow from PDF upload through processing pipeline to final storage
 ---
 
 
 # Data Flow
 
-## Primary Data Flow Path
+## Primary Data Pipeline
 
 1. PDF Upload & Initial Processing
-- File arrives via CLI/web upload (`pdf_slurper/cli_v2.py`, `pdf_slurper/server.py`)
-- PDF content extracted using PyMuPDF/PDFPlumber strategies (`src/infrastructure/pdf/processor.py`)
+- Location: src/infrastructure/pdf/processor.py
+- PDF submissions received through web interface
+- Raw PDF parsed for laboratory sample tables and metadata
+- Extracts concentration, volume, quality metrics
 Importance Score: 85
 
-2. Data Extraction & Transformation
-- Tables identified and extracted from PDF
-- Headers normalized and mapped to sample fields
-- Data transformed into structured Sample objects
-- Content hash generated for idempotency checks
+2. Data Transformation
+- Location: src/domain/models/sample.py
+- Raw extracted values mapped to domain entities
+- QC thresholds applied:
+  - Concentration validation (ng/µL)
+  - Volume requirements (µL)
+  - A260/A280 ratio analysis
+- Quality scores calculated
 Importance Score: 90
 
-3. Quality Control Processing
-- QC thresholds applied to concentration, volume, A260/280 ratio
-- Quality scores calculated for each sample
-- Samples flagged based on QC criteria
-- QC results stored with sample records
-Importance Score: 85
-
-4. Database Storage
-- Submissions and samples saved to SQLite database
-- Metadata associated with submission record
-- Sample data stored with relationships to submission
-- Hash checks prevent duplicate storage
-Importance Score: 75
-
-5. Statistics & Reporting Flow
-- Submission statistics calculated (averages, counts)
-- QC status aggregated across samples
-- Results transformed for CSV/JSON export
-- Manifest generation for approved samples
+3. Domain Processing
+- Location: src/domain/models/submission.py
+- Sample data grouped into submissions
+- Workflow state tracking:
+  - received → processing → sequenced → completed
+- Laboratory metadata enrichment:
+  - Human DNA flags
+  - Organism classification
+  - Service requirements
 Importance Score: 80
 
-## Key Integration Points
-
-1. PDF Processing Pipeline
-```
-Upload -> Content Extraction -> Table Detection -> Data Normalization -> Sample Creation
-```
-
-2. QC Processing Pipeline
-```
-Sample Data -> Threshold Application -> Score Calculation -> Status Update -> Storage
-```
-
-3. Export Pipeline
-```
-Database Query -> Data Aggregation -> Format Transformation -> File Generation
-```
-
-## Error Handling Flow
-- Invalid PDFs rejected at upload
-- Malformed data caught during extraction
-- QC failures logged with samples
-- Database transaction rollback on errors
+4. Storage Layer
+- Location: src/infrastructure/persistence/repositories/submission_repository.py
+- Final validated data persisted
+- Maintains submission history
+- Tracks sample locations and processing status
 Importance Score: 75
+
+## Legacy Integration Flow
+- Location: src/adapter.py
+- Parallel processing during transition
+- Legacy PDF processor compatibility
+- Dual-database synchronization
+Importance Score: 70
 
 $END$
 

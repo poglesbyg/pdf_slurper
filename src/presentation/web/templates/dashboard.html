@@ -41,7 +41,7 @@
                 </div>
                 <div class="ml-4">
                     <p class="text-sm font-medium text-gray-500">Total Submissions</p>
-                    <p class="text-2xl font-semibold text-gray-900" x-text="stats.total_submissions || totalSubmissions || '0'"></p>
+                    <p class="text-2xl font-semibold text-gray-900" x-text="stats.total_submissions || '0'"></p>
                 </div>
             </div>
         </div>
@@ -57,7 +57,7 @@
                 </div>
                 <div class="ml-4">
                     <p class="text-sm font-medium text-gray-500">Total Samples</p>
-                    <p class="text-2xl font-semibold text-gray-900" x-text="stats.total_samples || '...'"></p>
+                    <p class="text-2xl font-semibold text-gray-900" x-text="stats.total_samples || '0'"></p>
                 </div>
             </div>
         </div>
@@ -89,7 +89,7 @@
                 </div>
                 <div class="ml-4">
                     <p class="text-sm font-medium text-gray-500">Avg Quality Score</p>
-                    <p class="text-2xl font-semibold text-gray-900" x-text="stats.average_quality_score ? stats.average_quality_score.toFixed(1) : '...'"></p>
+                    <p class="text-2xl font-semibold text-gray-900" x-text="stats.average_quality_score ? stats.average_quality_score.toFixed(1) : 'N/A'"></p>
                 </div>
             </div>
         </div>
@@ -100,13 +100,17 @@
         <!-- Workflow Status Chart -->
         <div class="bg-white shadow rounded-lg p-6">
             <h3 class="text-lg font-medium text-gray-900 mb-4">Workflow Status Distribution</h3>
-            <canvas id="workflowChart" width="400" height="200"></canvas>
+            <div class="relative" style="height: 300px;">
+                <canvas id="workflowChart"></canvas>
+            </div>
         </div>
 
         <!-- QC Status Chart -->
         <div class="bg-white shadow rounded-lg p-6">
             <h3 class="text-lg font-medium text-gray-900 mb-4">QC Status Distribution</h3>
-            <canvas id="qcChart" width="400" height="200"></canvas>
+            <div class="relative" style="height: 300px;">
+                <canvas id="qcChart"></canvas>
+            </div>
         </div>
     </div>
 
@@ -183,7 +187,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 <script>
 function dashboard() {
     return {
@@ -191,12 +194,13 @@ function dashboard() {
         recentSubmissions: [],
         workflowChart: null,
         qcChart: null,
-        totalSubmissions: 0,
         
         async init() {
             await this.loadData();
-            await this.$nextTick(); // Wait for DOM updates
-            this.setupCharts();
+            // Wait for DOM to be ready and Chart.js to be loaded
+            setTimeout(() => {
+                this.setupCharts();
+            }, 100);
         },
         
         async loadData() {
@@ -212,24 +216,25 @@ function dashboard() {
                 const submissionsData = await submissionsResponse.json();
                 this.recentSubmissions = submissionsData.items || [];
                 
-                // Get total submissions count from a full list (or could add a count endpoint)
-                const allSubmissionsResponse = await fetch('http://localhost:8080/api/v1/submissions/?limit=1000');
-                if (allSubmissionsResponse.ok) {
-                    const allData = await allSubmissionsResponse.json();
-                    this.totalSubmissions = allData.total || allData.items?.length || 0;
-                }
+                console.log('Dashboard loaded:', {
+                    total_submissions: this.stats.total_submissions,
+                    total_samples: this.stats.total_samples,
+                    workflow_status: this.stats.workflow_status,
+                    qc_status: this.stats.qc_status,
+                    recent_count: this.recentSubmissions.length
+                });
                 
             } catch (error) {
                 console.error('Dashboard error:', error);
                 // Use default values if API fails
                 this.stats = {
+                    total_submissions: 0,
                     total_samples: 0,
                     workflow_status: {},
                     qc_status: {},
                     average_quality_score: null
                 };
                 this.recentSubmissions = [];
-                this.totalSubmissions = 0;
             }
         },
         
@@ -247,78 +252,133 @@ function dashboard() {
             // Workflow Status Chart
             const workflowCtx = document.getElementById('workflowChart');
             if (workflowCtx) {
-                this.workflowChart = new Chart(workflowCtx.getContext('2d'), {
-                    type: 'doughnut',
-                    data: {
-                        labels: ['Received', 'Processing', 'Sequenced', 'Completed', 'Failed'],
-                        datasets: [{
-                            data: [
-                                this.stats.workflow_status?.received || 0,
-                                this.stats.workflow_status?.processing || 0,
-                                this.stats.workflow_status?.sequenced || 0,
-                                this.stats.workflow_status?.completed || 0,
-                                this.stats.workflow_status?.failed || 0
-                            ],
-                            backgroundColor: [
-                                '#3B82F6', '#F59E0B', '#8B5CF6', '#10B981', '#EF4444'
-                            ]
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                position: 'bottom'
-                            },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        return context.label + ': ' + context.parsed;
+                const workflowData = [
+                    this.stats.workflow_status?.received || 0,
+                    this.stats.workflow_status?.processing || 0,
+                    this.stats.workflow_status?.sequenced || 0,
+                    this.stats.workflow_status?.completed || 0,
+                    this.stats.workflow_status?.failed || 0,
+                    this.stats.workflow_status?.pending || 0
+                ];
+                
+                // Only show chart if there's data
+                if (workflowData.some(v => v > 0)) {
+                    this.workflowChart = new Chart(workflowCtx.getContext('2d'), {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['Received', 'Processing', 'Sequenced', 'Completed', 'Failed', 'Pending'],
+                            datasets: [{
+                                data: workflowData,
+                                backgroundColor: [
+                                    '#3B82F6', '#F59E0B', '#8B5CF6', '#10B981', '#EF4444', '#6B7280'
+                                ],
+                                borderWidth: 1,
+                                borderColor: '#fff'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'bottom',
+                                    labels: {
+                                        padding: 15,
+                                        font: {
+                                            size: 12
+                                        }
+                                    }
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            let label = context.label || '';
+                                            if (label) {
+                                                label += ': ';
+                                            }
+                                            label += context.parsed;
+                                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                            const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                            label += ` (${percentage}%)`;
+                                            return label;
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
-                });
+                    });
+                } else {
+                    // Show no data message
+                    workflowCtx.getContext('2d').font = '14px sans-serif';
+                    workflowCtx.getContext('2d').textAlign = 'center';
+                    workflowCtx.getContext('2d').fillStyle = '#6B7280';
+                    workflowCtx.getContext('2d').fillText('No workflow data available', workflowCtx.width / 2, workflowCtx.height / 2);
+                }
             }
             
             // QC Status Chart
             const qcCtx = document.getElementById('qcChart');
             if (qcCtx) {
-                this.qcChart = new Chart(qcCtx.getContext('2d'), {
-                    type: 'doughnut',
-                    data: {
-                        labels: ['Pending', 'Passed', 'Warning', 'Failed'],
-                        datasets: [{
-                            data: [
-                                this.stats.qc_status?.pending || 0,
-                                this.stats.qc_status?.passed || 0,
-                                this.stats.qc_status?.warning || 0,
-                                this.stats.qc_status?.failed || 0
-                            ],
-                            backgroundColor: [
-                                '#6B7280', '#10B981', '#F59E0B', '#EF4444'
-                            ]
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                position: 'bottom'
-                            },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        return context.label + ': ' + context.parsed;
+                const qcData = [
+                    this.stats.qc_status?.pending || 0,
+                    this.stats.qc_status?.passed || 0,
+                    this.stats.qc_status?.warning || 0,
+                    this.stats.qc_status?.failed || 0
+                ];
+                
+                // Only show chart if there's data
+                if (qcData.some(v => v > 0)) {
+                    this.qcChart = new Chart(qcCtx.getContext('2d'), {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['Pending', 'Passed', 'Warning', 'Failed'],
+                            datasets: [{
+                                data: qcData,
+                                backgroundColor: [
+                                    '#6B7280', '#10B981', '#F59E0B', '#EF4444'
+                                ],
+                                borderWidth: 1,
+                                borderColor: '#fff'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'bottom',
+                                    labels: {
+                                        padding: 15,
+                                        font: {
+                                            size: 12
+                                        }
+                                    }
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            let label = context.label || '';
+                                            if (label) {
+                                                label += ': ';
+                                            }
+                                            label += context.parsed;
+                                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                            const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                            label += ` (${percentage}%)`;
+                                            return label;
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
-                });
+                    });
+                } else {
+                    // Show no data message
+                    qcCtx.getContext('2d').font = '14px sans-serif';
+                    qcCtx.getContext('2d').textAlign = 'center';
+                    qcCtx.getContext('2d').fillStyle = '#6B7280';
+                    qcCtx.getContext('2d').fillText('No QC data available', qcCtx.width / 2, qcCtx.height / 2);
+                }
             }
         },
         
@@ -335,7 +395,8 @@ function dashboard() {
                     this.stats.workflow_status?.processing || 0,
                     this.stats.workflow_status?.sequenced || 0,
                     this.stats.workflow_status?.completed || 0,
-                    this.stats.workflow_status?.failed || 0
+                    this.stats.workflow_status?.failed || 0,
+                    this.stats.workflow_status?.pending || 0
                 ];
                 this.workflowChart.update();
             }

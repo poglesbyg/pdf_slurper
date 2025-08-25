@@ -10,49 +10,60 @@
 - Explain your OBSERVATIONS clearly, then provide REASONING to identify the exact issue. Add console logs when needed to gather more information.
 
 
-The PDF Slurper system implements specialized business logic for processing laboratory sample data through several key components:
+The system implements a laboratory sample processing pipeline with specialized PDF extraction and quality control workflows.
 
-### Core Business Components
+## Core Business Components
 
-1. PDF Sample Processing (Importance Score: 90)
-- Extracts laboratory metadata and sample data from structured PDF tables
-- Maps extracted data to standardized sample formats
-- Implements idempotency checks using SHA-256 hashing
-- Located in `pdf_slurper/slurp.py`
+### Sample Processing Pipeline
+Location: `src/infrastructure/pdf/processor.py`
+- Extracts laboratory data from standardized PDF forms
+- Processes concentration, volume and quality measurements
+- Maps extracted data to domain models
+Importance Score: 85
 
-2. Quality Control Processing (Importance Score: 85)
-- Applies multi-factor QC evaluations including:
-  - Concentration thresholds
-  - Volume minimums 
-  - A260/A280 quality ratios
-- Calculates weighted quality scores
-- Located in `src/domain/services/qc_service.py`
+### Quality Control System
+Location: `src/domain/models/sample.py`
+- Enforces laboratory QC thresholds:
+  - Minimum concentration requirements (ng/µL)
+  - Volume thresholds (µL)
+  - A260/A280 quality ratio validation
+- Calculates quality scores and failure reasons
+Importance Score: 90
 
-3. Sample Workflow Management (Importance Score: 80)
-- Manages sample lifecycle stages
-- Handles batch operations for multiple samples
-- Enforces workflow state transitions
-- Located in `src/domain/services/sample_tracking.py`
+### Laboratory Workflow Management  
+Location: `src/domain/models/submission.py`
+- Controls sample states (received, processing, sequenced)
+- Manages laboratory metadata:
+  - Human DNA detection
+  - Organism classification
+  - Service requirements
+Importance Score: 80
 
-4. Submission Processing (Importance Score: 75)
-- Aggregates samples into submissions
-- Generates submission statistics and QC reports
-- Manages submission metadata
-- Located in `src/domain/models/submission.py`
+### Measurement Processing
+Location: `src/domain/models/value_objects.py`
+- Validates concentration measurements with units
+- Processes volume thresholds
+- Handles quality ratio acceptable ranges
+- Tracks storage location hierarchy
+Importance Score: 70
 
-### Integration Components
+## Domain Integration Points
 
-1. Table Extraction (Importance Score: 85)
-- Normalizes laboratory table headers
-- Maps columns to standardized fields
-- Located in `pdf_slurper/mapping.py`
+### Table Header Recognition
+Location: `pdf_slurper/mapping.py`
+- Normalizes variant laboratory column headers
+- Matches fuzzy header terminology
+- Processes specialized unit notations
+Importance Score: 75
 
-2. Data Export (Importance Score: 75)
-- Generates sample manifests
-- Exports QC reports
-- Located in `pdf_slurper/exporters.py`
+### Quality Control Workflow
+Location: `pdf_slurper/db.py`
+- Implements pass/warning/fail status tracking
+- Manages QC threshold validations
+- Processes sample group batches
+Importance Score: 80
 
-The system maintains separation between core laboratory data processing and supporting infrastructure, with business logic concentrated in dedicated service and model components.
+The system specializes in laboratory sample management with emphasis on standardized measurement processing, quality control enforcement, and workflow tracking specific to genetic/molecular biology operations.
 
 $END$
 

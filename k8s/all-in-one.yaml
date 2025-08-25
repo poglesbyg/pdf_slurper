@@ -1,0 +1,173 @@
+---
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pdf-slurper
+  labels:
+    name: pdf-slurper
+---
+# ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pdf-slurper-config
+  namespace: pdf-slurper
+  labels:
+    app: pdf-slurper
+data:
+  PDF_SLURPER_ENV: "development"
+  PDF_SLURPER_USE_NEW: "true"
+  PDF_SLURPER_HOST: "0.0.0.0"
+  PDF_SLURPER_PORT: "8080"
+  LOG_LEVEL: "INFO"
+  API_DOCS_ENABLED: "true"
+  QC_AUTO_APPLY: "false"
+  WORKERS: "1"
+  DATABASE_URL: "sqlite:////app/data/pdf_slurper.db"
+---
+# Secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pdf-slurper-secret
+  namespace: pdf-slurper
+  labels:
+    app: pdf-slurper
+type: Opaque
+stringData:
+  API_KEY: "local-dev-api-key"
+  JWT_SECRET: "local-dev-jwt-secret"
+  SECRET_KEY: "local-dev-secret-key"
+---
+# PersistentVolumeClaim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pdf-slurper-data
+  namespace: pdf-slurper
+  labels:
+    app: pdf-slurper
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: local-path
+---
+# Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pdf-slurper
+  namespace: pdf-slurper
+  labels:
+    app: pdf-slurper
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pdf-slurper
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: pdf-slurper
+    spec:
+      containers:
+        - name: pdf-slurper
+          image: pdf_slurper-api:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+              name: http
+          envFrom:
+            - configMapRef:
+                name: pdf-slurper-config
+            - secretRef:
+                name: pdf-slurper-secret
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+            - name: uploads
+              mountPath: /app/uploads
+            - name: logs
+              mountPath: /app/logs
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: pdf-slurper-data
+        - name: uploads
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+---
+# NodePort Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: pdf-slurper
+  namespace: pdf-slurper
+  labels:
+    app: pdf-slurper
+spec:
+  type: NodePort
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30080
+      protocol: TCP
+      name: http
+  selector:
+    app: pdf-slurper
+---
+# LoadBalancer Service (OrbStack supports this)
+apiVersion: v1
+kind: Service
+metadata:
+  name: pdf-slurper-lb
+  namespace: pdf-slurper
+  labels:
+    app: pdf-slurper
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+      name: http
+  selector:
+    app: pdf-slurper

@@ -1,5 +1,5 @@
 ---
-description: Specification for data models and relationships between Submissions and Samples in a laboratory sample processing system
+description: For analyzing data models, relationships, states and lifecycle rules in domain models
 ---
 
 
@@ -8,61 +8,51 @@ description: Specification for data models and relationships between Submissions
 ## Core Data Models
 
 ### Submission Model
-**Importance Score: 90**
-- Represents a laboratory submission containing multiple samples
-- Key attributes:
-  - Submission ID
-  - Requester information
-  - Lab details
-  - Service requests
-  - Creation timestamp
-  - Content hash for idempotency
-  - Status tracking
-  - Associated samples collection
+Location: src/domain/models/submission.py
+- Represents a laboratory sample submission request
+- States: received, processing, sequenced, completed
+- Contains metadata: requester info, organism details, human DNA presence
+- Manages relationships to Sample models
+- Tracks overall submission status and QC validation results
+Importance Score: 85
 
-### Sample Model
-**Importance Score: 95**
+### Sample Model  
+Location: src/domain/models/sample.py
 - Represents individual laboratory samples within a submission
-- Domain-specific attributes:
-  - Sample ID
-  - Concentration (ng/μL)
-  - Volume (μL) 
-  - A260/A280 ratio
-  - QC status
-  - Processing status
-  - Storage location
-  - Organism classification
-  - Human DNA content flag
-  - Expiration tracking
+- Key attributes:
+  - Concentration measurements (ng/µL)
+  - Volume measurements (µL)
+  - A260/A280 quality ratios
+  - QC status with failure reasons
+- Lifecycle states: pending QC -> QC passed/failed
+- References parent Submission model
+Importance Score: 90
+
+### Value Objects
+Location: src/domain/models/value_objects.py
+- Concentration: Validates and stores concentration with units
+- Volume: Enforces minimum thresholds
+- QualityRatio: Validates A260/A280 and A260/A230 ranges
+- StorageLocation: Manages freezer/shelf/box hierarchy
+Importance Score: 75
 
 ## Relationships
 
-### Submission-Sample Relationship
-**Importance Score: 85**
-- One-to-many relationship between Submission and Sample
-- Submission aggregates multiple samples
-- Samples maintain reference to parent submission
-- Cascade deletion of samples when submission is deleted
+### Submission -> Sample
+- One-to-many relationship
+- Submission acts as aggregate root
+- Samples inherit workflow state from parent submission
+- QC validation aggregated from child samples
 
-### State Management
-**Importance Score: 80**
-- Sample states:
-  - Initial receipt
-  - QC pending
-  - QC passed/failed
-  - Processing
-  - Sequencing
-  - Completed
-- State transitions controlled by business rules
-- QC status determined by concentration, volume and quality ratio thresholds
+### Sample -> Quality Controls
+- One-to-many relationship with QC measurements
+- QC failures affect sample and parent submission status
+- Tracks historical QC results
 
-### Domain Value Objects
-**Importance Score: 75**
-- Concentration with unit validation
-- Volume with minimum thresholds
-- Quality ratios with acceptable ranges
-- Location tracking with format validation
-- Organism classification with predefined categories
+### Storage Location Hierarchy
+- Three-level nested structure: Freezer -> Shelf -> Box
+- Samples assigned unique positions within structure
+- Enforces capacity constraints per level
 
 $END$
 

@@ -131,12 +131,12 @@ class SQLSubmissionRepository(SubmissionRepository):
             True if deleted, False if not found
         """
         with self.database.get_session() as session:
-            orm = session.get(SubmissionORM, id)
+            orm = session.get(SubmissionORM, str(id))
             if not orm:
                 return False
             
             # Delete samples first (cascade should handle this)
-            stmt = select(SampleORM).where(SampleORM.submission_id == id)
+            stmt = select(SampleORM).where(SampleORM.submission_id == str(id))
             for sample_orm in session.exec(stmt):
                 session.delete(sample_orm)
             

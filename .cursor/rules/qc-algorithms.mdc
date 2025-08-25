@@ -1,5 +1,5 @@
 ---
-description: Quality control algorithms and thresholds for genetic sample analysis, including scoring formulas and batch processing.
+description: Documents core quality control algorithms and threshold calculations for laboratory sample processing and validation
 ---
 
 
@@ -7,55 +7,51 @@ description: Quality control algorithms and thresholds for genetic sample analys
 
 ## Core QC Algorithms
 
-### Quality Score Calculation
-File: `pdf_slurper/cli_v2.py`, `pdf_slurper/db.py`
-- Calculates sample quality scores based on:
-  - Concentration levels (ng/μL)
-  - Volume measurements (μL)
-  - A260/A280 ratio
-- Weighted scoring formula factors all three metrics
-- Each metric has configurable thresholds and weights
+Location: src/domain/models/sample.py
 Importance Score: 90
 
-### Batch QC Processing
-File: `pdf_slurper/cli_v2.py`
-- Processes multiple samples simultaneously for QC validation
-- Applies threshold checks across sample batches
-- Updates QC status based on aggregate results
+### Threshold Validation System
+- Enforces laboratory QC thresholds:
+  - Minimum concentration checks (ng/µL)
+  - Volume requirements (µL) per sample type
+  - A260/A280 ratio validation for nucleic acid purity
+  - A260/A230 contamination detection
+
+### Quality Score Calculation
+- Multi-parameter scoring incorporating:
+  - Raw concentration values
+  - Volume measurements
+  - Purity ratios
+  - Sample type specific modifiers
+
+### Batch Processing Logic
+Location: src/domain/models/submission.py
 Importance Score: 85
 
-### QC Status Management
-File: `pdf_slurper/db.py`
-- Tracks QC status transitions:
-  - PENDING → PROCESSING → PASSED/FAILED
-- Maintains history of QC checks
-- Links QC results to specific threshold sets
+- Validates sample groups against collective thresholds
+- Manages aggregate quality scores for batch submissions
+- Implements failure cascading rules for grouped samples
+- Tracks QC status with detailed failure reasons
+
+### Domain-Specific QC Rules
+Location: src/infrastructure/pdf/processor.py
 Importance Score: 80
 
-### Statistical Analysis
-File: `pdf_slurper/cli_v2.py`
-- Calculates submission-level QC metrics:
-  - Pass/fail rates
-  - Average quality scores
-  - Distribution of failures by metric
-- Generates QC summary reports
-Importance Score: 75
+- Laboratory-specific measurement validation:
+  - Qubit vs Nanodrop concentration reconciliation
+  - Unit standardization and conversion
+  - Scientific notation parsing
+  - Measurement precision requirements
 
-### Threshold Configuration
-File: `src/domain/models/sample.py`
-- Defines domain-specific threshold ranges
-- Configurable minimum/maximum values for:
-  - Concentration thresholds
-  - Volume requirements
-  - Quality ratios
-Importance Score: 85
+### Quality Control Workflow
+- Sequential validation stages:
+  1. Raw measurement validation
+  2. Type-specific threshold checks
+  3. Ratio analysis
+  4. Aggregate quality scoring
+  5. Pass/Warning/Fail determination
 
-### Batch Status Updates
-File: `pdf_slurper/cli_v2.py`
-- Updates QC status for multiple samples
-- Validates status transitions
-- Maintains consistency across related samples
-Importance Score: 70
+The QC system implements specialized laboratory requirements for genetic/molecular biology sample validation with emphasis on measurement accuracy and sample quality assurance.
 
 $END$
 

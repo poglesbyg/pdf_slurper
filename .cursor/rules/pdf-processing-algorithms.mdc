@@ -1,55 +1,57 @@
 ---
-description: PDF processing specifications for extracting structured data from laboratory sample documents
+description: Technical specification for PDF processing algorithms, metadata extraction, and table detection in laboratory sample processing
 ---
 
 
 # pdf-processing-algorithms
 
-## Core PDF Processing Components
-
-### 1. Metadata Extraction Algorithm 
-File: `pdf_slurper/slurp.py`
-- Extracts front-matter text using label detection 
-- Accumulates subsequent lines to build complete field values
-- Identifies key metadata fields like requester info, lab details
+## PDF Sample Data Extraction
 Importance Score: 85
 
-### 2. Table Detection and Parsing
-File: `pdf_slurper/slurp.py`
-- Identifies sample data tables through heuristic header matching
-- Maps normalized column headers to standardized sample fields
-- Handles merged cells and multi-line entries
-Importance Score: 90
+Key Components:
+1. Table Structure Detection
+- Laboratory-specific table recognition patterns 
+- Custom header mapping for standardizing different table formats
+- Detection of sample data grids containing concentration/volume metrics
 
-### 3. Header Normalization 
-File: `pdf_slurper/mapping.py`
-- Normalizes table headers through fuzzy matching
-- Maps logical field names to column indices
-- Handles variations in header naming conventions
-Importance Score: 75
+2. Metadata Extraction
+- Requester information parsing
+- Laboratory details identification
+- Service request categorization
+- Sample submission form validation
 
-### 4. Data Transformation Pipeline
-File: `pdf_slurper/slurp.py`
-- Converts extracted table data into Sample objects
-- Associates samples with Submission metadata
-- Implements idempotency checks using content hashing
+3. Header Normalization System
+- Domain-specific column header standardization
+- Fuzzy matching for variant headers like "qubit conc", "nanodrop conc"
+- Laboratory unit notation parsing (µL, ng/µL)
+
+4. Data Transformation Pipeline
+Located in: pdf_slurper/slurp.py
+- Extracts raw tabular data from PDF forms
+- Maps column headers to standardized fields
+- Validates measurement units and formats
+- Converts extracted data into domain models
+
+## Quality Control Integration
 Importance Score: 80
 
-### 5. Quality Control Processing
-File: `pdf_slurper/db.py`
-- Applies QC thresholds to concentration, volume, A260/A280 ratio
-- Calculates composite quality scores
-- Flags samples failing threshold criteria
-Importance Score: 85
+The PDF processing algorithms integrate with QC workflows through:
+- Detection of concentration measurements (Qubit/Nanodrop)
+- Extraction of quality ratios (A260/A280, A260/A230)
+- Volume measurement parsing with unit validation
+- Automated flagging of out-of-range values
 
-### 6. Sample Mapping Logic
-File: `pdf_slurper/mapping.py`
-- Derives mappings between PDF fields and sample attributes
-- Handles laboratory-specific field naming variations
-- Maps numeric fields to appropriate data types
-Importance Score: 70
+Primary Components:
+pdf_slurper/mapping.py
+- Header standardization rules
+- Unit conversion mappings
+- Laboratory-specific data format recognition
 
-The system implements specialized algorithms for processing laboratory sample PDFs, focusing on structured data extraction, normalization, and quality control validation. The core functionality revolves around accurate metadata extraction and sample data parsing from standardized laboratory documents.
+pdf_slurper/slurp.py
+- Core PDF parsing engine
+- Table structure detection
+- Data extraction pipeline
+- Quality metric identification
 
 $END$
 

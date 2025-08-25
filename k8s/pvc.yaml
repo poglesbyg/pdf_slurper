@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pdf-slurper-data
+  namespace: pdf-slurper
+  labels:
+    app: pdf-slurper
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi  # 5GB for local development
+  storageClassName: standard  # OrbStack uses 'standard' by default

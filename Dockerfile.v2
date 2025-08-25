@@ -21,13 +21,10 @@ LABEL org.opencontainers.image.title="PDF Slurper v2" \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
+    make \
     python3-dev \
     curl \
     && rm -rf /var/lib/apt/lists/*
-
-# Install uv
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Set working directory
 WORKDIR /build
@@ -36,9 +33,14 @@ WORKDIR /build
 COPY pyproject.toml .
 COPY README.md .
 
-# Install dependencies
-RUN uv venv && \
-    uv pip install -e . --all-extras
+# Copy source code
+COPY pdf_slurper pdf_slurper
+COPY src src
+
+# Create virtual environment and install dependencies
+RUN python -m venv /app/venv && \
+    /app/venv/bin/pip install --upgrade pip setuptools wheel && \
+    /app/venv/bin/pip install .
 
 # Production stage
 FROM python:3.11-slim
@@ -51,9 +53,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsm6 \
     libxext6 \
     libxrender-dev \
-    libglib2.0-0 \
     libgl1-mesa-glx \
-    libgthread-2.0-0 \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -65,14 +65,14 @@ RUN groupadd -r pdfslurper && \
 WORKDIR /app
 
 # Copy virtual environment from builder
-COPY --from=builder --chown=pdfslurper:pdfslurper /build/.venv /app/.venv
+COPY --from=builder --chown=pdfslurper:pdfslurper /app/venv /app/venv
 
 # Copy application code
 COPY --chown=pdfslurper:pdfslurper . .
 
 # Set environment variables
-ENV PATH="/app/.venv/bin:${PATH}" \
-    PYTHONPATH="/app:${PYTHONPATH}" \
+ENV PATH="/app/venv/bin:${PATH}" \
+    PYTHONPATH="/app" \
     PYTHONUNBUFFERED=1 \
     PDF_SLURPER_ENV=production \
     PDF_SLURPER_USE_NEW=true \

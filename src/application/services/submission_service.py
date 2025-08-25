@@ -1,6 +1,6 @@
 """Submission service - Application layer orchestration."""
 
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from pathlib import Path
 from datetime import datetime
 import logging
@@ -9,6 +9,9 @@ from ...domain.models.submission import Submission, SubmissionMetadata, PDFSourc
 from ...domain.models.sample import Sample
 from ...domain.models.value_objects import SubmissionId, WorkflowStatus
 from ...domain.repositories.submission_repository import SubmissionRepository
+
+if TYPE_CHECKING:
+    from ...infrastructure.pdf.processor import PDFProcessor
 
 
 logger = logging.getLogger(__name__)

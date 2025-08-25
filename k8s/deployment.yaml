@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pdf-slurper
+  namespace: pdf-slurper
+  labels:
+    app: pdf-slurper
+spec:
+  replicas: 1  # Single replica for local
+  selector:
+    matchLabels:
+      app: pdf-slurper
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: pdf-slurper
+    spec:
+      containers:
+        - name: pdf-slurper
+          image: pdf_slurper-api:latest  # Using the locally built image
+          imagePullPolicy: Never  # Use local image, don't try to pull
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+              name: http
+          envFrom:
+            - configMapRef:
+                name: pdf-slurper-config
+            - secretRef:
+                name: pdf-slurper-secret
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+            - name: uploads
+              mountPath: /app/uploads
+            - name: logs
+              mountPath: /app/logs
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health  # Using /health since /ready might not exist yet
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: pdf-slurper-data
+        - name: uploads
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
+      securityContext:
+        runAsUser: 1000  # pdfslurper user from Dockerfile
+        runAsGroup: 1000
+        fsGroup: 1000
