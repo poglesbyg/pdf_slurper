@@ -126,8 +126,9 @@
 
                 async checkApiConnection() {
                     try {
-                        const response = await fetch(window.API_CONFIG.getApiUrl('api/v1/submissions/'), { 
-                            method: 'HEAD',
+                        // Use GET with limit=1 instead of HEAD as the API doesn't support HEAD requests
+                        const response = await fetch(window.API_CONFIG.getApiUrl('api/v1/submissions/?limit=1'), { 
+                            method: 'GET',
                             signal: AbortSignal.timeout(5000)
                         });
                         this.apiStatus = response.ok ? 'Connected' : 'Error';

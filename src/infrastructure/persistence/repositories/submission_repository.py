@@ -486,91 +486,78 @@ class SQLSubmissionRepository(SubmissionRepository):
         """
         with self.database.get_session() as session:
             # Count v2 submissions  
-            submission_count_v2 = session.exec(
+            submission_count = session.exec(
                 select(func.count()).select_from(SubmissionORM)
-            ).one()
+            ).one() or 0
             
             # Count v2 samples
-            sample_count_v2 = session.exec(
+            sample_count = session.exec(
                 select(func.count()).select_from(SampleORM)
-            ).one()
+            ).one() or 0
             
-            # Also count legacy submissions and samples
-            from pdf_slurper.db import open_session, Submission as LegacySubmission, Sample as LegacySample
-            from sqlmodel import select as legacy_select, func as legacy_func
+            # Get workflow status counts (defaulting all to 0 for now)
+            status_counts = {
+                "received": submission_count,  # All submissions start as received
+                "processing": 0,
+                "sequenced": 0, 
+                "completed": 0,
+                "failed": 0,
+                "pending": 0
+            }
             
-            with open_session() as legacy_session:
-                submission_count_legacy = legacy_session.exec(
-                    legacy_select(legacy_func.count()).select_from(LegacySubmission)
-                ).one()
-                
-                sample_count_legacy = legacy_session.exec(
-                    legacy_select(legacy_func.count()).select_from(LegacySample)
-                ).one()
-            
-            # Combine counts
-            submission_count = submission_count_v2 + submission_count_legacy
-            sample_count = sample_count_v2 + sample_count_legacy
-            
-            # Get workflow and QC status counts from legacy samples
-            status_counts = {}
+            # Get QC status counts from v2 samples
             qc_counts = {}
-            
-            with open_session() as legacy_session:
-                # Count by workflow status from legacy samples (column is named 'status')
-                for status in ["received", "processing", "sequenced", "completed", "failed"]:
-                    count = legacy_session.exec(
-                        legacy_select(legacy_func.count()).select_from(LegacySample).where(
-                            LegacySample.status == status
-                        )
-                    ).one()
-                    status_counts[status] = count or 0
-                
-                # Count NULL status as 'pending'
-                null_status_count = legacy_session.exec(
-                    legacy_select(legacy_func.count()).select_from(LegacySample).where(
-                        LegacySample.status == None
+            for qc_status in ["pending", "pass", "warning", "fail"]:
+                count = session.exec(
+                    select(func.count()).select_from(SampleORM).where(
+                        SampleORM.qc_status == qc_status
                     )
-                ).one()
-                status_counts["pending"] = status_counts.get("pending", 0) + (null_status_count or 0)
-                
-                # Count by QC status from legacy samples
-                for qc_status in ["pending", "passed", "warning", "failed"]:
-                    count = legacy_session.exec(
-                        legacy_select(legacy_func.count()).select_from(LegacySample).where(
-                            LegacySample.qc_status == qc_status
-                        )
-                    ).one()
-                    qc_counts[qc_status] = count or 0
-                
-                # Count NULL qc_status as 'pending'
-                null_qc_count = legacy_session.exec(
-                    legacy_select(legacy_func.count()).select_from(LegacySample).where(
-                        LegacySample.qc_status == None
-                    )
-                ).one()
-                qc_counts["pending"] = qc_counts.get("pending", 0) + (null_qc_count or 0)
-                
-                # Calculate averages from legacy samples
-                avg_volume = legacy_session.exec(
-                    legacy_select(legacy_func.avg(LegacySample.volume_ul)).select_from(LegacySample)
                 ).one() or 0
-                
-                avg_concentration = legacy_session.exec(
-                    legacy_select(legacy_func.avg(LegacySample.qubit_ng_per_ul)).select_from(LegacySample)
-                ).one() or 0
+                # Map 'pass' to 'passed' and 'fail' to 'failed' for frontend compatibility
+                mapped_status = qc_status
+                if qc_status == "pass":
+                    mapped_status = "passed"
+                elif qc_status == "fail":
+                    mapped_status = "failed"
+                qc_counts[mapped_status] = count
             
-            print(f"DEBUG: Final status_counts = {status_counts}")
-            print(f"DEBUG: Final qc_counts = {qc_counts}")
+            # Count NULL qc_status as 'pending'
+            null_qc_count = session.exec(
+                select(func.count()).select_from(SampleORM).where(
+                    SampleORM.qc_status == None
+                )
+            ).one() or 0
+            qc_counts["pending"] = qc_counts.get("pending", 0) + null_qc_count
+            
+            # Calculate averages from v2 samples
+            avg_volume = session.exec(
+                select(func.avg(SampleORM.volume)).select_from(SampleORM)
+            ).one() or 0
+            
+            avg_concentration = session.exec(
+                select(func.avg(SampleORM.concentration)).select_from(SampleORM)
+            ).one() or 0
+            
+            # Calculate average quality score
+            avg_quality_score = session.exec(
+                select(func.avg(SampleORM.quality_score)).select_from(SampleORM)
+            ).one() or 0
+            
+            # Count samples with location data
+            samples_with_location = session.exec(
+                select(func.count()).select_from(SampleORM).where(
+                    SampleORM.well_position != None
+                )
+            ).one() or 0
             
             return {
                 "total_submissions": submission_count,
                 "total_samples": sample_count,
-                "workflow_status": status_counts,  # Renamed to match frontend expectations
-                "qc_status": qc_counts,  # Renamed to match frontend expectations
+                "workflow_status": status_counts,  
+                "qc_status": qc_counts,  
                 "average_volume": float(avg_volume) if avg_volume else 0,
                 "average_concentration": float(avg_concentration) if avg_concentration else 0,
-                "average_quality_score": None,  # Would need to calculate this
-                "samples_with_location": 0,  # Would need to query for this
-                "samples_processed": status_counts.get("processing", 0) + status_counts.get("completed", 0) + status_counts.get("sequenced", 0)
+                "average_quality_score": float(avg_quality_score) if avg_quality_score else 0,
+                "samples_with_location": samples_with_location,
+                "samples_processed": 0  # Will be based on actual processing status when implemented
             }
