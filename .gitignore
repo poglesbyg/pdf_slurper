@@ -8,3 +8,12 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Security - NEVER commit these!
+deployment_secrets.txt
+*.secrets
+*.key
+*_secret*
+secrets.yaml
+openshift/secrets.yaml
+.env*
