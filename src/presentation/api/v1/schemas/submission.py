@@ -15,6 +15,7 @@ class SubmissionMetadataResponse(BaseModel):
     lab: Optional[str] = None
     organism: Optional[str] = None
     contains_human_dna: Optional[bool] = None
+    storage_location: Optional[str] = None
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -85,6 +86,60 @@ class SearchRequest(BaseModel):
     end_date: Optional[datetime] = Field(None, description="End date filter")
     limit: int = Field(100, ge=1, le=1000, description="Maximum results")
     offset: int = Field(0, ge=0, description="Results offset")
+
+
+class UpdateSubmissionRequest(BaseModel):
+    """Update submission request schema."""
+    
+    identifier: Optional[str] = Field(None, description="Identifier")
+    service_requested: Optional[str] = Field(None, description="Service requested")
+    requester: Optional[str] = Field(None, description="Requester name")
+    requester_email: Optional[str] = Field(None, description="Requester email")
+    lab: Optional[str] = Field(None, description="Laboratory")
+    organism: Optional[str] = Field(None, description="Organism")
+    storage_location: Optional[str] = Field(None, description="Storage location")
+    contains_human_dna: Optional[bool] = Field(None, description="Contains human DNA")
+
+
+class SampleRequest(BaseModel):
+    """Sample create/update request schema."""
+    
+    name: str = Field(..., description="Sample name")
+    volume_ul: Optional[float] = Field(None, description="Volume in microliters")
+    qubit_ng_per_ul: Optional[float] = Field(None, description="Qubit concentration (ng/µL)")
+    nanodrop_ng_per_ul: Optional[float] = Field(None, description="Nanodrop concentration (ng/µL)")
+    a260_a280: Optional[float] = Field(None, description="A260/A280 ratio")
+    a260_a230: Optional[float] = Field(None, description="A260/A230 ratio")
+    status: Optional[str] = Field("pending", description="Sample status")
+    notes: Optional[str] = Field(None, description="Additional notes")
+
+
+class SampleResponse(BaseModel):
+    """Sample response schema."""
+    
+    id: str
+    submission_id: str
+    name: str
+    volume_ul: Optional[float]
+    qubit_ng_per_ul: Optional[float]
+    nanodrop_ng_per_ul: Optional[float]
+    a260_a280: Optional[float]
+    a260_a230: Optional[float]
+    status: str
+    notes: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SampleListResponse(BaseModel):
+    """Sample list response schema."""
+    
+    items: List[SampleResponse]
+    total: int
+    offset: int
+    limit: int
 
 
 class StatisticsResponse(BaseModel):

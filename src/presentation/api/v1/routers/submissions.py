@@ -26,12 +26,16 @@ from ..schemas.submission import (
     SubmissionResponse,
     SubmissionListResponse,
     CreateSubmissionRequest,
+    UpdateSubmissionRequest,
     ApplyQCRequest,
     QCResultResponse,
     BatchUpdateStatusRequest,
     SearchRequest,
     StatisticsResponse,
-    SubmissionMetadataResponse
+    SubmissionMetadataResponse,
+    SampleRequest,
+    SampleResponse,
+    SampleListResponse
 )
 
 router = APIRouter(
@@ -54,6 +58,7 @@ router = APIRouter(
 )
 async def create_submission_from_upload(
     pdf_file: UploadFile = File(..., description="PDF file to process"),
+    storage_location: str = Form(..., description="Storage location for samples"),
     force: bool = Form(False, description="Force reprocessing if file already exists"),
     auto_qc: bool = Form(False, description="Automatically apply QC thresholds"),
     min_concentration: float = Form(10.0, description="Minimum concentration threshold"),
@@ -78,7 +83,8 @@ async def create_submission_from_upload(
             # Process the PDF
             submission = await container.submission_service.create_from_pdf(
                 pdf_path=temp_path,
-                force=force
+                force=force,
+                storage_location=storage_location
             )
             
             # Apply QC if requested
@@ -119,7 +125,8 @@ async def create_submission_from_upload(
                 requester_email=submission.metadata.requester_email if submission.metadata.requester_email else None,
                 lab=submission.metadata.lab,
                 organism=submission.metadata.organism.full_name if submission.metadata.organism else None,
-                contains_human_dna=submission.metadata.contains_human_dna
+                contains_human_dna=submission.metadata.contains_human_dna,
+                storage_location=submission.metadata.storage_location
             ),
             pdf_source={
                 "file_path": str(submission.pdf_source.file_path),
@@ -382,7 +389,8 @@ async def get_submission(
                 requester_email=submission.metadata.requester_email if submission.metadata.requester_email else None,
                 lab=submission.metadata.lab,
                 organism=submission.metadata.organism.full_name if submission.metadata.organism else None,
-                contains_human_dna=submission.metadata.contains_human_dna
+                contains_human_dna=submission.metadata.contains_human_dna,
+                storage_location=submission.metadata.storage_location
             ),
             pdf_source={
                 "file_path": str(submission.pdf_source.file_path),
@@ -555,5 +563,314 @@ async def get_statistics(
         return StatisticsResponse(**stats)
     except EntityNotFoundException as e:
         raise HTTPException(status_code=404, detail=e.message)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch(
+    "/{submission_id}",
+    response_model=SubmissionResponse,
+    summary="Update submission metadata",
+    description="Update metadata fields of a submission"
+)
+async def update_submission(
+    submission_id: str,
+    request: UpdateSubmissionRequest,
+    container: Container = Depends(get_container_dependency)
+) -> SubmissionResponse:
+    """Update submission metadata."""
+    try:
+        # Get existing submission from legacy database
+        from pdf_slurper.db import open_session, Submission as LegacySubmission, Sample as LegacySample
+        from sqlmodel import select, func
+        
+        with open_session() as session:
+            legacy_sub = session.exec(
+                select(LegacySubmission).where(LegacySubmission.id == submission_id)
+            ).first()
+            
+            if not legacy_sub:
+                raise HTTPException(status_code=404, detail="Submission not found")
+            
+            # Update fields if provided
+            update_dict = request.dict(exclude_unset=True)
+            for field, value in update_dict.items():
+                if hasattr(legacy_sub, field):
+                    setattr(legacy_sub, field, value)
+            
+            # Special handling for storage_location - store it in the notes field
+            if "storage_location" in update_dict:
+                # Store location in notes field as JSON
+                import json
+                notes = json.loads(legacy_sub.notes or "{}")
+                notes["storage_location"] = update_dict["storage_location"]
+                legacy_sub.notes = json.dumps(notes)
+            
+            session.add(legacy_sub)
+            session.commit()
+            session.refresh(legacy_sub)
+            
+            # Get sample count
+            sample_count = session.exec(
+                select(func.count()).select_from(LegacySample).where(
+                    LegacySample.submission_id == legacy_sub.id
+                )
+            ).one()
+            
+            # Extract storage location from notes
+            notes = json.loads(legacy_sub.notes or "{}")
+            storage_location = notes.get("storage_location")
+            
+            return SubmissionResponse(
+                id=legacy_sub.id,
+                created_at=legacy_sub.created_at,
+                updated_at=legacy_sub.created_at,  # Legacy DB doesn't have updated_at
+                sample_count=sample_count,
+                metadata=SubmissionMetadataResponse(
+                    identifier=legacy_sub.identifier,
+                    service_requested=legacy_sub.service_requested,
+                    requester=legacy_sub.requester,
+                    requester_email=legacy_sub.requester_email,
+                    lab=legacy_sub.lab,
+                    organism=legacy_sub.source_organism,
+                    contains_human_dna=legacy_sub.human_dna == "Yes" if legacy_sub.human_dna else None,
+                    storage_location=storage_location
+                ),
+                pdf_source={
+                    "file_path": legacy_sub.source_file,
+                    "file_hash": legacy_sub.source_sha256,
+                    "page_count": legacy_sub.page_count
+                }
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/{submission_id}/samples",
+    response_model=SampleResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create new sample",
+    description="Create a new sample for a submission"
+)
+async def create_sample(
+    submission_id: str,
+    request: SampleRequest,
+    container: Container = Depends(get_container_dependency)
+) -> SampleResponse:
+    """Create a new sample for a submission."""
+    try:
+        from pdf_slurper.db import open_session, Sample as LegacySample, Submission as LegacySubmission
+        from sqlmodel import select
+        import uuid
+        
+        with open_session() as session:
+            # Check submission exists
+            submission = session.exec(
+                select(LegacySubmission).where(LegacySubmission.id == submission_id)
+            ).first()
+            
+            if not submission:
+                raise HTTPException(status_code=404, detail="Submission not found")
+            
+            # Create new sample
+            sample = LegacySample(
+                id=str(uuid.uuid4())[:12],
+                submission_id=submission_id,
+                name=request.name,
+                volume_ul=request.volume_ul,
+                qubit_ng_per_ul=request.qubit_ng_per_ul,
+                nanodrop_ng_per_ul=request.nanodrop_ng_per_ul,
+                a260_a280=request.a260_a280,
+                a260_a230=request.a260_a230,
+                created_at=datetime.utcnow()
+            )
+            
+            # Store notes and status in notes field as JSON
+            import json
+            notes_data = {"notes": request.notes, "status": request.status or "pending"}
+            sample.notes = json.dumps(notes_data)
+            
+            session.add(sample)
+            session.commit()
+            session.refresh(sample)
+            
+            notes_data = json.loads(sample.notes or "{}")
+            
+            return SampleResponse(
+                id=sample.id,
+                submission_id=sample.submission_id,
+                name=sample.name,
+                volume_ul=sample.volume_ul,
+                qubit_ng_per_ul=sample.qubit_ng_per_ul,
+                nanodrop_ng_per_ul=sample.nanodrop_ng_per_ul,
+                a260_a280=sample.a260_a280,
+                a260_a230=sample.a260_a230,
+                status=notes_data.get("status", "pending"),
+                notes=notes_data.get("notes"),
+                created_at=sample.created_at,
+                updated_at=sample.created_at
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/{submission_id}/samples/{sample_id}",
+    response_model=SampleResponse,
+    summary="Get sample details",
+    description="Get details of a specific sample"
+)
+async def get_sample(
+    submission_id: str,
+    sample_id: str,
+    container: Container = Depends(get_container_dependency)
+) -> SampleResponse:
+    """Get sample details."""
+    try:
+        from pdf_slurper.db import open_session, Sample as LegacySample
+        from sqlmodel import select
+        import json
+        
+        with open_session() as session:
+            sample = session.exec(
+                select(LegacySample).where(
+                    LegacySample.id == sample_id,
+                    LegacySample.submission_id == submission_id
+                )
+            ).first()
+            
+            if not sample:
+                raise HTTPException(status_code=404, detail="Sample not found")
+            
+            notes_data = json.loads(sample.notes or "{}")
+            
+            return SampleResponse(
+                id=sample.id,
+                submission_id=sample.submission_id,
+                name=sample.name,
+                volume_ul=sample.volume_ul,
+                qubit_ng_per_ul=sample.qubit_ng_per_ul,
+                nanodrop_ng_per_ul=sample.nanodrop_ng_per_ul,
+                a260_a280=sample.a260_a280,
+                a260_a230=sample.a260_a230,
+                status=notes_data.get("status", "pending"),
+                notes=notes_data.get("notes"),
+                created_at=sample.created_at,
+                updated_at=sample.created_at
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch(
+    "/{submission_id}/samples/{sample_id}",
+    response_model=SampleResponse,
+    summary="Update sample",
+    description="Update a sample's data"
+)
+async def update_sample(
+    submission_id: str,
+    sample_id: str,
+    request: SampleRequest,
+    container: Container = Depends(get_container_dependency)
+) -> SampleResponse:
+    """Update sample data."""
+    try:
+        from pdf_slurper.db import open_session, Sample as LegacySample
+        from sqlmodel import select
+        import json
+        
+        with open_session() as session:
+            sample = session.exec(
+                select(LegacySample).where(
+                    LegacySample.id == sample_id,
+                    LegacySample.submission_id == submission_id
+                )
+            ).first()
+            
+            if not sample:
+                raise HTTPException(status_code=404, detail="Sample not found")
+            
+            # Update fields
+            update_dict = request.dict(exclude_unset=True, exclude={"status", "notes"})
+            for field, value in update_dict.items():
+                if hasattr(sample, field):
+                    setattr(sample, field, value)
+            
+            # Update notes and status
+            notes_data = json.loads(sample.notes or "{}")
+            if request.status is not None:
+                notes_data["status"] = request.status
+            if request.notes is not None:
+                notes_data["notes"] = request.notes
+            sample.notes = json.dumps(notes_data)
+            
+            session.add(sample)
+            session.commit()
+            session.refresh(sample)
+            
+            return SampleResponse(
+                id=sample.id,
+                submission_id=sample.submission_id,
+                name=sample.name,
+                volume_ul=sample.volume_ul,
+                qubit_ng_per_ul=sample.qubit_ng_per_ul,
+                nanodrop_ng_per_ul=sample.nanodrop_ng_per_ul,
+                a260_a280=sample.a260_a280,
+                a260_a230=sample.a260_a230,
+                status=notes_data.get("status", "pending"),
+                notes=notes_data.get("notes"),
+                created_at=sample.created_at,
+                updated_at=sample.created_at
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete(
+    "/{submission_id}/samples/{sample_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete sample",
+    description="Delete a sample from a submission"
+)
+async def delete_sample(
+    submission_id: str,
+    sample_id: str,
+    container: Container = Depends(get_container_dependency)
+):
+    """Delete a sample."""
+    try:
+        from pdf_slurper.db import open_session, Sample as LegacySample
+        from sqlmodel import select
+        
+        with open_session() as session:
+            sample = session.exec(
+                select(LegacySample).where(
+                    LegacySample.id == sample_id,
+                    LegacySample.submission_id == submission_id
+                )
+            ).first()
+            
+            if not sample:
+                raise HTTPException(status_code=404, detail="Sample not found")
+            
+            session.delete(sample)
+            session.commit()
+            
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

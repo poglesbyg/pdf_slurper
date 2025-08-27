@@ -30,6 +30,7 @@ class SubmissionMetadata:
     contains_human_dna: Optional[bool] = None
     sample_buffer: Optional[str] = None
     submission_type: Optional[str] = None
+    storage_location: Optional[str] = None  # Location where samples are stored
     
     @property
     def is_expired(self) -> bool:

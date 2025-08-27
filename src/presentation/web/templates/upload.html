@@ -23,9 +23,28 @@
     <!-- Upload Form -->
     <div class="bg-white shadow rounded-lg p-6">
         <form @submit.prevent="submitForm()" class="space-y-6">
+            <!-- Storage Location Field (Required) -->
+            <div>
+                <label for="storage-location" class="block text-sm font-medium text-gray-700">
+                    Storage Location <span class="text-red-500">*</span>
+                </label>
+                <input 
+                    type="text" 
+                    id="storage-location"
+                    x-model="storageLocation"
+                    placeholder="e.g., Freezer A, Shelf 2, Box 3 or Lab 101 - Cabinet B"
+                    required
+                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 px-3 py-2"
+                    :class="{'border-red-500': !storageLocation && attemptedSubmit}">
+                <p class="mt-1 text-sm text-gray-500">Specify where the samples are/will be stored</p>
+                <div x-show="!storageLocation && attemptedSubmit" class="mt-1 text-sm text-red-600">
+                    Storage location is required
+                </div>
+            </div>
+
             <!-- File Upload Area -->
             <div class="space-y-4">
-                <label class="block text-sm font-medium text-gray-700">PDF File</label>
+                <label class="block text-sm font-medium text-gray-700">PDF File <span class="text-red-500">*</span></label>
                 
                 <!-- Drag & Drop Zone -->
                 <div 
@@ -254,10 +273,12 @@
 function uploadForm() {
     return {
         selectedFile: null,
+        storageLocation: '',
         dragOver: false,
         isProcessing: false,
         showAdvanced: false,
         result: null,
+        attemptedSubmit: false,
         options: {
             force: false,
             autoQC: false,
@@ -287,6 +308,14 @@ function uploadForm() {
         },
         
         async submitForm() {
+            this.attemptedSubmit = true;
+            
+            // Validate required fields
+            if (!this.storageLocation || !this.storageLocation.trim()) {
+                showFlash('Please enter the storage location', 'error');
+                return;
+            }
+            
             if (!this.selectedFile) {
                 showFlash('Please select a PDF file', 'error');
                 return;
@@ -300,6 +329,7 @@ function uploadForm() {
                 const formData = new FormData();
                 formData.append('pdf_file', this.selectedFile);
                 formData.append('force', this.options.force);
+                formData.append('storage_location', this.storageLocation.trim());
                 
                 // Add advanced options if enabled
                 if (this.options.autoQC) {
@@ -342,6 +372,8 @@ function uploadForm() {
         
         resetForm() {
             this.selectedFile = null;
+            this.storageLocation = '';
+            this.attemptedSubmit = false;
             this.options = {
                 force: false,
                 autoQC: false,

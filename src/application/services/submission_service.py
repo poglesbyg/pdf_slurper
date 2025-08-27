@@ -40,13 +40,15 @@ class SubmissionService:
     async def create_from_pdf(
         self,
         pdf_path: Path,
-        force: bool = False
+        force: bool = False,
+        storage_location: Optional[str] = None
     ) -> Submission:
         """Create submission from PDF file.
         
         Args:
             pdf_path: Path to PDF file
             force: Force re-import even if file exists
+            storage_location: Storage location for the samples
             
         Returns:
             Created submission
@@ -107,7 +109,8 @@ class SubmissionService:
                 requester_email=legacy_sub.requester_email,  # Just use string for now
                 lab=legacy_sub.lab,
                 organism=None,  # Would need to parse from source_organism
-                contains_human_dna=legacy_sub.human_dna == "Yes" if legacy_sub.human_dna else None
+                contains_human_dna=legacy_sub.human_dna == "Yes" if legacy_sub.human_dna else None,
+                storage_location=storage_location  # Store the provided location
             )
             
             # Create PDF source

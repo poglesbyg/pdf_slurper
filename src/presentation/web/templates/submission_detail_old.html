@@ -240,76 +240,6 @@
             </div>
         </div>
     </div>
-    
-    <!-- Add/Edit Sample Modal -->
-    <div x-show="showAddSampleForm || editingSample" 
-         x-transition:enter="transition ease-out duration-300"
-         x-transition:enter-start="opacity-0"
-         x-transition:enter-end="opacity-100"
-         x-transition:leave="transition ease-in duration-200"
-         x-transition:leave-start="opacity-100"
-         x-transition:leave-end="opacity-0"
-         class="fixed inset-0 bg-gray-500 bg-opacity-75 overflow-y-auto h-full w-full z-50">
-        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <h3 class="text-lg font-bold text-gray-900 mb-4" x-text="editingSample ? 'Edit Sample' : 'Add New Sample'"></h3>
-            
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">Sample Name *</label>
-                    <input type="text" x-model="sampleForm.name" required
-                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">Volume (µL)</label>
-                    <input type="number" x-model="sampleForm.volume_ul" step="0.01"
-                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">Concentration (ng/µL)</label>
-                    <input type="number" x-model="sampleForm.qubit_ng_per_ul" step="0.01"
-                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">A260/A280 Ratio</label>
-                    <input type="number" x-model="sampleForm.a260_a280" step="0.01" min="0" max="3"
-                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">A260/A230 Ratio</label>
-                    <input type="number" x-model="sampleForm.a260_a230" step="0.01" min="0" max="3"
-                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">Status</label>
-                    <select x-model="sampleForm.status"
-                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                        <option value="pending">Pending</option>
-                        <option value="processing">Processing</option>
-                        <option value="completed">Completed</option>
-                        <option value="failed">Failed</option>
-                    </select>
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">Notes</label>
-                    <textarea x-model="sampleForm.notes" rows="3"
-                              class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"></textarea>
-                </div>
-            </div>
-            
-            <div class="flex justify-end space-x-3 mt-6">
-                <button @click="closeSampleForm()" class="btn-secondary">Cancel</button>
-                <button @click="saveSample()" class="btn-primary">
-                    <span x-text="editingSample ? 'Update' : 'Create'"></span>
-                </button>
-            </div>
-        </div>
-    </div>
 </div>
 {% endblock %}
 
@@ -322,20 +252,6 @@ function submissionDetail(submissionId) {
         loading: true,
         loadingSamples: false,
         error: null,
-        editMode: false,
-        editData: {},
-        showAddSampleForm: false,
-        editingSample: null,
-        sampleForm: {
-            name: '',
-            volume_ul: null,
-            qubit_ng_per_ul: null,
-            nanodrop_ng_per_ul: null,
-            a260_a280: null,
-            a260_a230: null,
-            status: 'pending',
-            notes: ''
-        },
         
         async loadSubmission() {
             this.loading = true;
@@ -348,9 +264,8 @@ function submissionDetail(submissionId) {
                     throw new Error(`Failed to load submission: ${response.statusText}`);
                 }
                 this.submission = await response.json();
-                this.editData = {...this.submission.metadata};
                 
-                // Load samples
+                // Load samples from legacy database
                 this.loadSamples();
                 
             } catch (error) {
@@ -364,11 +279,13 @@ function submissionDetail(submissionId) {
         async loadSamples() {
             this.loadingSamples = true;
             try {
+                // Get samples from the API
                 const response = await fetch(`/api/v1/submissions/${submissionId}/samples`);
                 if (response.ok) {
                     const data = await response.json();
                     this.samples = data.items || [];
                 } else {
+                    // Fallback: samples might be in the submission object
                     this.samples = this.submission?.samples || [];
                 }
             } catch (error) {
@@ -377,120 +294,6 @@ function submissionDetail(submissionId) {
             } finally {
                 this.loadingSamples = false;
             }
-        },
-        
-        async saveSubmission() {
-            try {
-                const response = await fetch(`/api/v1/submissions/${submissionId}`, {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(this.editData)
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Failed to update submission');
-                }
-                
-                this.submission = await response.json();
-                this.editMode = false;
-                showFlash('Submission updated successfully', 'success');
-            } catch (error) {
-                showFlash('Failed to update submission', 'error');
-            }
-        },
-        
-        cancelEdit() {
-            this.editMode = false;
-            this.editData = {...this.submission.metadata};
-        },
-        
-        editSample(sample) {
-            this.editingSample = sample;
-            this.sampleForm = {
-                name: sample.name || '',
-                volume_ul: sample.volume_ul,
-                qubit_ng_per_ul: sample.qubit_ng_per_ul,
-                nanodrop_ng_per_ul: sample.nanodrop_ng_per_ul,
-                a260_a280: sample.a260_a280,
-                a260_a230: sample.a260_a230,
-                status: sample.status || 'pending',
-                notes: sample.notes || ''
-            };
-        },
-        
-        async saveSample() {
-            if (!this.sampleForm.name) {
-                showFlash('Sample name is required', 'error');
-                return;
-            }
-            
-            try {
-                const url = this.editingSample 
-                    ? `/api/v1/submissions/${submissionId}/samples/${this.editingSample.id}`
-                    : `/api/v1/submissions/${submissionId}/samples`;
-                    
-                const method = this.editingSample ? 'PATCH' : 'POST';
-                
-                const response = await fetch(url, {
-                    method: method,
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(this.sampleForm)
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Failed to save sample');
-                }
-                
-                showFlash(
-                    this.editingSample ? 'Sample updated successfully' : 'Sample created successfully',
-                    'success'
-                );
-                
-                this.closeSampleForm();
-                this.loadSamples();
-            } catch (error) {
-                showFlash('Failed to save sample', 'error');
-            }
-        },
-        
-        async deleteSample(sampleId) {
-            if (!confirm('Are you sure you want to delete this sample?')) {
-                return;
-            }
-            
-            try {
-                const response = await fetch(`/api/v1/submissions/${submissionId}/samples/${sampleId}`, {
-                    method: 'DELETE'
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Failed to delete sample');
-                }
-                
-                showFlash('Sample deleted successfully', 'success');
-                this.loadSamples();
-            } catch (error) {
-                showFlash('Failed to delete sample', 'error');
-            }
-        },
-        
-        closeSampleForm() {
-            this.showAddSampleForm = false;
-            this.editingSample = null;
-            this.sampleForm = {
-                name: '',
-                volume_ul: null,
-                qubit_ng_per_ul: null,
-                nanodrop_ng_per_ul: null,
-                a260_a280: null,
-                a260_a230: null,
-                status: 'pending',
-                notes: ''
-            };
         },
         
         formatDate(dateString) {
@@ -523,6 +326,7 @@ function submissionDetail(submissionId) {
         
         async exportCSV() {
             try {
+                // Convert samples to CSV
                 if (this.samples.length === 0) {
                     showFlash('No samples to export', 'warning');
                     return;
