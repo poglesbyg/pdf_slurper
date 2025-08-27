@@ -2,6 +2,7 @@
 
 from typing import List, Optional
 from pathlib import Path
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, Form
 from fastapi.responses import JSONResponse
@@ -676,7 +677,15 @@ async def create_sample(
             if not submission:
                 raise HTTPException(status_code=404, detail="Submission not found")
             
-            # Create new sample
+            # Get the max row_index for new sample
+            from sqlmodel import func
+            max_row = session.exec(
+                select(func.max(LegacySample.row_index)).where(
+                    LegacySample.submission_id == submission_id
+                )
+            ).one()
+            
+            # Create new sample with required indices
             sample = LegacySample(
                 id=str(uuid.uuid4())[:12],
                 submission_id=submission_id,
@@ -686,6 +695,9 @@ async def create_sample(
                 nanodrop_ng_per_ul=request.nanodrop_ng_per_ul,
                 a260_a280=request.a260_a280,
                 a260_a230=request.a260_a230,
+                row_index=(max_row + 1) if max_row is not None else 0,
+                table_index=0,  # Default to table 0
+                page_index=0,   # Default to page 0
                 created_at=datetime.utcnow()
             )
             

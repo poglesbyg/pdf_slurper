@@ -51,6 +51,7 @@ class Submission(SQLModel, table=True):
     human_dna: Optional[str] = None
     source_organism: Optional[str] = None
     sample_buffer_json: Optional[str] = None
+    notes: Optional[str] = None  # Added for storing additional data like storage_location
 
     # Relationship omitted; fetch samples by filtering Sample.submission_id
 
@@ -83,7 +84,7 @@ class Sample(SQLModel, table=True):
     quality_score: Optional[float] = None  # 0-100 score
     
     # Additional tracking
-    notes: Optional[str] = None  # General notes
+    notes: Optional[str] = None  # General notes field for additional data
     sequencing_run_id: Optional[str] = None  # Link to sequencing run
     data_path: Optional[str] = None  # Path to result files
     repeat_of_sample_id: Optional[str] = None  # If this is a repeat/rerun
