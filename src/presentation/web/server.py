@@ -3,10 +3,11 @@
 from pathlib import Path
 from typing import Optional
 from fastapi import FastAPI, Request, HTTPException, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
+import httpx
 import uvicorn
 
 from ...infrastructure.config.settings import get_settings
@@ -103,6 +104,55 @@ async def health_check():
 async def ready_check():
     """Readiness check endpoint."""
     return {"status": "ready", "service": "web-ui", "version": "2.0.0"}
+
+
+# Proxy API requests to the API server
+@app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
+async def proxy_api(request: Request, path: str):
+    """Proxy API requests to the API server on port 8080."""
+    api_url = f"http://localhost:8080/api/{path}"
+    
+    # Get the query parameters
+    query_params = dict(request.query_params)
+    
+    # Get the request body if it exists
+    body = None
+    if request.method in ["POST", "PUT", "PATCH"]:
+        try:
+            body = await request.body()
+        except:
+            body = None
+    
+    # Forward the request using httpx
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.request(
+                method=request.method,
+                url=api_url,
+                params=query_params,
+                content=body,
+                headers={
+                    key: value for key, value in request.headers.items()
+                    if key.lower() not in ["host", "content-length"]
+                },
+                follow_redirects=True
+            )
+            
+            # Return the response
+            return StreamingResponse(
+                content=response.iter_bytes(),
+                status_code=response.status_code,
+                headers={
+                    key: value for key, value in response.headers.items()
+                    if key.lower() not in ["content-encoding", "content-length", "transfer-encoding"]
+                },
+                media_type=response.headers.get("content-type")
+            )
+        except httpx.ConnectError:
+            raise HTTPException(
+                status_code=503,
+                detail="API server is not available"
+            )
 
 
 @app.exception_handler(404)

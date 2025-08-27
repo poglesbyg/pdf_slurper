@@ -6,6 +6,7 @@
     <title>{% block title %}PDF Slurper v2{% endblock %}</title>
     
     <!-- Tailwind CSS -->
+    <!-- WARNING: CDN version should not be used in production. Use Tailwind CLI or PostCSS instead: https://tailwindcss.com/docs/installation -->
     <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- Alpine.js for reactivity -->
@@ -138,9 +139,21 @@
         // API utilities
         const API_BASE = '/api/v1';  // Use relative path for production
         
+        // Helper to ensure proper formatting for API endpoints
+        function normalizeEndpoint(endpoint) {
+            // FastAPI's trailing slash behavior varies by endpoint
+            // Collection endpoints need trailing slash
+            if (endpoint === '/submissions' && !endpoint.includes('?')) {
+                return endpoint + '/';
+            }
+            // Statistics endpoint doesn't use trailing slash
+            return endpoint;
+        }
+        
         async function apiCall(endpoint, options = {}) {
             try {
-                const response = await fetch(`${API_BASE}${endpoint}`, {
+                const normalizedEndpoint = normalizeEndpoint(endpoint);
+                const response = await fetch(`${API_BASE}${normalizedEndpoint}`, {
                     headers: {
                         'Content-Type': 'application/json',
                         ...options.headers

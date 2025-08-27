@@ -1,0 +1,16 @@
+{
+  "name": "pdf-slurper-frontend",
+  "version": "2.0.0",
+  "description": "Frontend assets for PDF Slurper",
+  "scripts": {
+    "build-css": "tailwindcss -i ./src/input.css -o ./static/css/styles.css --minify",
+    "watch-css": "tailwindcss -i ./src/input.css -o ./static/css/styles.css --watch",
+    "build": "npm run build-css",
+    "dev": "npm run watch-css"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.0",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32"
+  }
+}
