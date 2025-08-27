@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PDF Slurper Dashboard</title>
+    <script src="/config.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <style>
@@ -125,7 +126,7 @@
 
                 async checkApiConnection() {
                     try {
-                        const response = await fetch('/api/v1/submissions', { 
+                        const response = await fetch(window.API_CONFIG.getApiUrl('api/v1/submissions/'), { 
                             method: 'HEAD',
                             signal: AbortSignal.timeout(5000)
                         });
@@ -141,13 +142,13 @@
                     
                     try {
                         // Load statistics
-                        const statsResponse = await fetch('/api/v1/submissions/statistics');
+                        const statsResponse = await fetch(window.API_CONFIG.getApiUrl('api/v1/submissions/statistics'));
                         if (statsResponse.ok) {
                             this.stats = await statsResponse.json();
                         }
                         
                         // Load recent submissions
-                        const submissionsResponse = await fetch('/api/v1/submissions?limit=10');
+                        const submissionsResponse = await fetch(window.API_CONFIG.getApiUrl('api/v1/submissions/?limit=10'));
                         if (submissionsResponse.ok) {
                             const data = await submissionsResponse.json();
                             this.recentSubmissions = data.items || [];
