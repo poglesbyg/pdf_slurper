@@ -67,6 +67,21 @@
                         </div>
                     </div>
 
+                    <!-- Storage Location -->
+                    <div class="mt-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            Storage Location <span class="text-red-500">*</span>
+                        </label>
+                        <input 
+                            type="text" 
+                            x-model="storageLocation" 
+                            placeholder="e.g., Building A - Room 101 - Freezer 3"
+                            class="w-full rounded-md border-gray-300 shadow-sm text-sm"
+                            required
+                        >
+                        <p class="mt-1 text-xs text-gray-500">Specify where the samples will be stored</p>
+                    </div>
+
                     <!-- Options -->
                     <div class="mt-6 space-y-4">
                         <label class="flex items-center">
@@ -99,8 +114,8 @@
                     <div class="mt-6">
                         <button 
                             @click="submitForm()"
-                            :disabled="!selectedFile || isProcessing"
-                            :class="(!selectedFile || isProcessing) ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'"
+                            :disabled="!selectedFile || !storageLocation || isProcessing"
+                            :class="(!selectedFile || !storageLocation || isProcessing) ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'"
                             class="w-full text-white font-medium py-2 px-4 rounded-lg transition-colors"
                         >
                             <span x-show="!isProcessing">Upload and Process PDF</span>
@@ -150,6 +165,7 @@
         function uploadApp() {
             return {
                 selectedFile: null,
+                storageLocation: '',
                 isDragging: false,
                 isProcessing: false,
                 result: null,
@@ -185,7 +201,15 @@
                 },
 
                 async submitForm() {
-                    if (!this.selectedFile) return;
+                    if (!this.selectedFile) {
+                        this.error = 'Please select a PDF file';
+                        return;
+                    }
+                    
+                    if (!this.storageLocation.trim()) {
+                        this.error = 'Please enter a storage location';
+                        return;
+                    }
                     
                     this.isProcessing = true;
                     this.error = null;
@@ -195,6 +219,7 @@
                     try {
                         const formData = new FormData();
                         formData.append('pdf_file', this.selectedFile);
+                        formData.append('storage_location', this.storageLocation);
                         formData.append('force', this.options.force);
                         
                         if (this.options.autoQC) {

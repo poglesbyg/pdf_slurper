@@ -1,30 +1,97 @@
-FROM python:3.13-slim
+# Multi-stage build for production-ready image
+FROM python:3.11-slim as builder
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PORT=8080 \
-    HOST=0.0.0.0 \
-    PDF_SLURPER_DB="/data/db.sqlite3"
+# Build arguments
+ARG BUILD_DATE
+ARG VCS_REF
+ARG VERSION=2.0.0
 
-WORKDIR /app
+# Labels
+LABEL org.opencontainers.image.title="PDF Slurper v2" \
+      org.opencontainers.image.description="Professional PDF data extraction and sample tracking system" \
+      org.opencontainers.image.authors="Your Team" \
+      org.opencontainers.image.vendor="Your Organization" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.source="https://github.com/yourusername/pdf-slurper" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.licenses="MIT"
 
-# system deps for pdfplumber/pymupdf
+# Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    poppler-utils \
-    libfreetype6 \
-    libjpeg62-turbo \
-    libopenjp2-7 \
+    gcc \
+    g++ \
+    make \
+    python3-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --upgrade pip setuptools wheel
-COPY pyproject.toml ./
-COPY uv.lock ./
-COPY pdf_slurper ./pdf_slurper
-RUN pip install --no-cache-dir .
+# Set working directory
+WORKDIR /build
 
+# Copy dependency files
+COPY pyproject.toml .
+COPY README.md .
+
+# Copy source code
+COPY pdf_slurper pdf_slurper
+COPY src src
+
+# Create virtual environment and install dependencies
+RUN python -m venv /app/venv && \
+    /app/venv/bin/pip install --upgrade pip setuptools wheel && \
+    /app/venv/bin/pip install .
+
+# Production stage
+FROM python:3.11-slim
+
+    # Install runtime dependencies
+    RUN apt-get update && apt-get install -y --no-install-recommends \
+        poppler-utils \
+        libglib2.0-0 \
+        libgomp1 \
+        libsm6 \
+        libxext6 \
+        libxrender-dev \
+        libgl1 \
+        curl \
+        && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN groupadd -r pdfslurper && \
+    useradd -r -g pdfslurper -m -d /home/pdfslurper pdfslurper
+
+# Set working directory
+WORKDIR /app
+
+# Copy virtual environment from builder
+COPY --from=builder --chown=pdfslurper:pdfslurper /app/venv /app/venv
+
+# Copy application code
+COPY --chown=pdfslurper:pdfslurper . .
+
+# Set environment variables
+ENV PATH="/app/venv/bin:${PATH}" \
+    PYTHONPATH="/app" \
+    PYTHONUNBUFFERED=1 \
+    PDF_SLURPER_ENV=production \
+    PDF_SLURPER_USE_NEW=true \
+    PDF_SLURPER_HOST=0.0.0.0 \
+    PDF_SLURPER_PORT=8080
+
+# Create necessary directories
+RUN mkdir -p /app/data /app/logs /app/uploads && \
+    chown -R pdfslurper:pdfslurper /app/data /app/logs /app/uploads
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+# Switch to non-root user
+USER pdfslurper
+
+# Expose ports
 EXPOSE 8080
 
-CMD ["pdf-slurp-web"]
-
-
+# Default command - can be overridden
+CMD ["python", "run_api.py"]

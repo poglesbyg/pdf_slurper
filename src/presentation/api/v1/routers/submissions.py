@@ -206,7 +206,7 @@ async def list_submissions(
 ) -> SubmissionListResponse:
     """List submissions."""
     try:
-        # Try v2 service first
+        # Use v2 service to search submissions
         submissions = await container.submission_service.search(
             query=query,
             requester_email=requester_email,
@@ -214,61 +214,6 @@ async def list_submissions(
             limit=limit,
             offset=offset
         )
-        
-        # If no v2 submissions, get from legacy database
-        if not submissions:
-            from pdf_slurper.db import open_session, Submission as LegacySubmission, Sample as LegacySample
-            from sqlmodel import select, func
-            
-            with open_session() as session:
-                stmt = select(LegacySubmission).order_by(LegacySubmission.created_at.desc())
-                if requester_email:
-                    stmt = stmt.where(LegacySubmission.requester_email == requester_email)
-                if lab:
-                    stmt = stmt.where(LegacySubmission.lab == lab)
-                stmt = stmt.offset(offset).limit(limit)
-                
-                legacy_submissions = session.exec(stmt).all()
-                
-                items = []
-                for legacy_sub in legacy_submissions:
-                    # Get sample count
-                    sample_count = session.exec(
-                        select(func.count()).select_from(LegacySample).where(
-                            LegacySample.submission_id == legacy_sub.id
-                        )
-                    ).one()
-                    
-                    items.append(SubmissionResponse(
-                        id=legacy_sub.id,
-                        created_at=legacy_sub.created_at,
-                        updated_at=legacy_sub.created_at,  # Legacy doesn't have updated_at
-                        sample_count=sample_count,
-                        metadata=SubmissionMetadataResponse(
-                            identifier=legacy_sub.identifier,
-                            service_requested=legacy_sub.service_requested,
-                            requester=legacy_sub.requester,
-                            requester_email=legacy_sub.requester_email,
-                            lab=legacy_sub.lab,
-                            organism=legacy_sub.source_organism,
-                            contains_human_dna=legacy_sub.human_dna == "Yes" if legacy_sub.human_dna else None
-                        ),
-                        pdf_source={
-                            "file_path": legacy_sub.source_file,
-                            "file_hash": legacy_sub.source_sha256,
-                            "page_count": legacy_sub.page_count
-                        }
-                    ))
-                
-                # Get total count
-                total = session.exec(select(func.count()).select_from(LegacySubmission)).one()
-                
-                return SubmissionListResponse(
-                    items=items,
-                    total=total,
-                    offset=offset,
-                    limit=limit
-                )
         
         # Convert v2 submissions to response schema
         items = []

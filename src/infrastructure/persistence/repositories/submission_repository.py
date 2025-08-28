@@ -531,11 +531,11 @@ class SQLSubmissionRepository(SubmissionRepository):
             
             # Calculate averages from v2 samples
             avg_volume = session.exec(
-                select(func.avg(SampleORM.volume)).select_from(SampleORM)
+                select(func.avg(SampleORM.volume_ul)).select_from(SampleORM)
             ).one() or 0
             
             avg_concentration = session.exec(
-                select(func.avg(SampleORM.concentration)).select_from(SampleORM)
+                select(func.avg(SampleORM.nanodrop_ng_per_ul)).select_from(SampleORM)
             ).one() or 0
             
             # Calculate average quality score
@@ -546,7 +546,7 @@ class SQLSubmissionRepository(SubmissionRepository):
             # Count samples with location data
             samples_with_location = session.exec(
                 select(func.count()).select_from(SampleORM).where(
-                    SampleORM.well_position != None
+                    SampleORM.location != None
                 )
             ).one() or 0
             
