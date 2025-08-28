@@ -102,16 +102,8 @@ async def create_submission_from_upload(
             if temp_path.exists():
                 os.unlink(temp_path)
         
-        # Get actual sample count from legacy database
-        from pdf_slurper.db import open_session, Sample as LegacySample
-        from sqlmodel import select, func
-        
-        with open_session() as session:
-            sample_count = session.exec(
-                select(func.count()).select_from(LegacySample).where(
-                    LegacySample.submission_id == submission.id
-                )
-            ).one()
+        # Use sample count from the submission object itself
+        sample_count = len(submission.samples) if hasattr(submission, 'samples') else submission.sample_count
         
         # Convert to response schema
         return SubmissionResponse(
@@ -266,62 +258,16 @@ async def get_submission(
             SubmissionId(submission_id)
         )
         
-        # If not found, try legacy database
+        # If not found, raise 404
         if not submission:
-            from pdf_slurper.db import open_session, Submission as LegacySubmission, Sample as LegacySample
-            from sqlmodel import select, func
-            
-            with open_session() as session:
-                legacy_sub = session.exec(
-                    select(LegacySubmission).where(LegacySubmission.id == submission_id)
-                ).first()
-                
-                if not legacy_sub:
-                    raise HTTPException(
-                        status_code=404,
-                        detail=f"Submission not found: {submission_id}"
-                    )
-                
-                # Get sample count
-                sample_count = session.exec(
-                    select(func.count()).select_from(LegacySample).where(
-                        LegacySample.submission_id == legacy_sub.id
-                    )
-                ).one()
-                
-                # Return legacy submission as response
-                return SubmissionResponse(
-                    id=legacy_sub.id,
-                    created_at=legacy_sub.created_at,
-                    updated_at=legacy_sub.created_at,  # Legacy doesn't have updated_at
-                    sample_count=sample_count,
-                    metadata=SubmissionMetadataResponse(
-                        identifier=legacy_sub.identifier,
-                        service_requested=legacy_sub.service_requested,
-                        requester=legacy_sub.requester,
-                        requester_email=legacy_sub.requester_email,
-                        lab=legacy_sub.lab,
-                        organism=legacy_sub.source_organism,
-                        contains_human_dna=legacy_sub.human_dna == "Yes" if legacy_sub.human_dna else None
-                    ),
-                    pdf_source={
-                        "file_path": legacy_sub.source_file,
-                        "file_hash": legacy_sub.source_sha256,
-                        "page_count": legacy_sub.page_count
-                    }
-                )
+            raise HTTPException(
+                status_code=404,
+                detail=f"Submission not found: {submission_id}"
+            )
         
         # Return v2 submission
-        # Get sample count from legacy database if needed
-        from pdf_slurper.db import open_session, Sample as LegacySample
-        from sqlmodel import select, func
-        
-        with open_session() as session:
-            sample_count = session.exec(
-                select(func.count()).select_from(LegacySample).where(
-                    LegacySample.submission_id == submission.id
-                )
-            ).one()
+        # Use sample count from submission object
+        sample_count = len(submission.samples) if hasattr(submission, 'samples') else submission.sample_count
         
         return SubmissionResponse(
             id=submission.id,

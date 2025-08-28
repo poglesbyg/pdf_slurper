@@ -5,13 +5,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 import logging
 
-# Import old code
-import sys
-sys.path.append(str(Path(__file__).parent.parent))
-from pdf_slurper.db import init_db as old_init_db, open_session as old_open_session
-from pdf_slurper.slurp import slurp_pdf as old_slurp_pdf
-
-# Import new code
+# Import new code only - removed legacy imports
 from .application.container import Container
 from .infrastructure.config.settings import Settings
 
@@ -19,24 +13,14 @@ logger = logging.getLogger(__name__)
 
 
 class MigrationAdapter:
-    """Adapter to use new modular code with old system."""
+    """Adapter to use only new modular code - legacy support removed."""
     
-    def __init__(self, use_new_code: bool = False):
-        """Initialize adapter.
-        
-        Args:
-            use_new_code: Whether to use new modular code
-        """
-        self.use_new_code = use_new_code
-        self.container: Optional[Container] = None
-        
-        if use_new_code:
-            # Initialize new container
-            settings = Settings()
-            self.container = Container(settings)
-            logger.info("Using new modular architecture")
-        else:
-            logger.info("Using legacy code")
+    def __init__(self):
+        """Initialize adapter with new modular code only."""
+        # Always use new code now
+        settings = Settings()
+        self.container = Container(settings)
+        logger.info("Using new modular architecture")
     
     def slurp_pdf(
         self,
@@ -44,36 +28,17 @@ class MigrationAdapter:
         db_path: Optional[Path] = None,
         force: bool = False
     ) -> Dict[str, Any]:
-        """Process PDF file.
+        """Process PDF file using new modular code.
         
         Args:
             pdf_path: Path to PDF file
-            db_path: Database path (for old code)
+            db_path: Database path (ignored, for backwards compatibility)
             force: Force re-import
             
         Returns:
             Processing result
         """
-        if self.use_new_code:
-            # Use new code
-            return self._slurp_pdf_new(pdf_path, force)
-        else:
-            # Use old code
-            return self._slurp_pdf_old(pdf_path, db_path, force)
-    
-    def _slurp_pdf_old(
-        self,
-        pdf_path: Path,
-        db_path: Optional[Path],
-        force: bool
-    ) -> Dict[str, Any]:
-        """Process PDF using old code."""
-        result = old_slurp_pdf(pdf_path, db_path=db_path, force=force)
-        return {
-            "submission_id": result.submission_id,
-            "num_samples": result.num_samples,
-            "source": "legacy"
-        }
+        return self._slurp_pdf_new(pdf_path, force)
     
     def _slurp_pdf_new(self, pdf_path: Path, force: bool) -> Dict[str, Any]:
         """Process PDF using new code."""
@@ -94,22 +59,17 @@ class MigrationAdapter:
             loop.close()
     
     def init_database(self, db_path: Optional[Path] = None) -> None:
-        """Initialize database.
+        """Initialize database using new modular code.
         
         Args:
-            db_path: Database path
+            db_path: Database path (ignored, for backwards compatibility)
         """
-        if self.use_new_code:
-            # Use new code
-            self.container.database.create_tables()
-            logger.info("Initialized database (new)")
-        else:
-            # Use old code
-            old_init_db(db_path)
-            logger.info("Initialized database (legacy)")
+        # Use new code
+        self.container.database.create_tables()
+        logger.info("Initialized database (new)")
     
     def get_submission_statistics(self, submission_id: str) -> Dict[str, Any]:
-        """Get submission statistics.
+        """Get submission statistics using new modular code.
         
         Args:
             submission_id: Submission ID
@@ -117,26 +77,20 @@ class MigrationAdapter:
         Returns:
             Statistics
         """
-        if self.use_new_code:
-            # Use new code
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-            try:
-                from .domain.models.value_objects import SubmissionId
-                stats = loop.run_until_complete(
-                    self.container.submission_service.get_statistics(
-                        SubmissionId(submission_id)
-                    )
+        # Use new code
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        try:
+            from .domain.models.value_objects import SubmissionId
+            stats = loop.run_until_complete(
+                self.container.submission_service.get_statistics(
+                    SubmissionId(submission_id)
                 )
-                return stats
-            finally:
-                loop.close()
-        else:
-            # Use old code
-            from pdf_slurper.db import get_submission_statistics
-            with old_open_session() as session:
-                return get_submission_statistics(session, submission_id)
+            )
+            return stats
+        finally:
+            loop.close()
     
     def apply_qc(
         self,
@@ -145,7 +99,7 @@ class MigrationAdapter:
         min_volume: float = 20.0,
         min_ratio: float = 1.8
     ) -> Dict[str, Any]:
-        """Apply QC to submission.
+        """Apply QC to submission using new modular code.
         
         Args:
             submission_id: Submission ID
@@ -156,36 +110,23 @@ class MigrationAdapter:
         Returns:
             QC results
         """
-        if self.use_new_code:
-            # Use new code
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-            try:
-                from .domain.models.value_objects import SubmissionId
-                results = loop.run_until_complete(
-                    self.container.submission_service.apply_qc(
-                        SubmissionId(submission_id),
-                        min_concentration=min_concentration,
-                        min_volume=min_volume,
-                        min_quality_ratio=min_ratio
-                    )
+        # Use new code
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        try:
+            from .domain.models.value_objects import SubmissionId
+            results = loop.run_until_complete(
+                self.container.submission_service.apply_qc(
+                    SubmissionId(submission_id),
+                    min_concentration=min_concentration,
+                    min_volume=min_volume,
+                    min_quality_ratio=min_ratio
                 )
-                return results
-            finally:
-                loop.close()
-        else:
-            # Use old code
-            from pdf_slurper.db import apply_qc_thresholds
-            with old_open_session() as session:
-                flagged = apply_qc_thresholds(
-                    session,
-                    submission_id,
-                    min_concentration,
-                    min_volume,
-                    min_ratio
-                )
-                return {"flagged": flagged, "source": "legacy"}
+            )
+            return results
+        finally:
+            loop.close()
     
     def cleanup(self) -> None:
         """Clean up resources."""
@@ -197,26 +138,22 @@ class MigrationAdapter:
 _adapter: Optional[MigrationAdapter] = None
 
 
-def get_adapter(use_new_code: bool = False) -> MigrationAdapter:
-    """Get adapter instance.
-    
-    Args:
-        use_new_code: Whether to use new modular code
+def get_adapter() -> MigrationAdapter:
+    """Get adapter instance using new modular code.
         
     Returns:
         Adapter instance
     """
     global _adapter
-    if _adapter is None or _adapter.use_new_code != use_new_code:
-        _adapter = MigrationAdapter(use_new_code)
+    if _adapter is None:
+        _adapter = MigrationAdapter()
     return _adapter
 
 
 def set_use_new_code(enabled: bool) -> None:
-    """Set whether to use new modular code.
+    """No longer needed - always uses new modular code.
     
     Args:
-        enabled: Whether to use new code
+        enabled: Ignored, kept for backwards compatibility
     """
-    global _adapter
-    _adapter = MigrationAdapter(enabled)
+    pass  # Always uses new code now

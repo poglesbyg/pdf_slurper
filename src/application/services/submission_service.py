@@ -6,8 +6,11 @@ from datetime import datetime
 import logging
 
 from ...domain.models.submission import Submission, SubmissionMetadata, PDFSource
-from ...domain.models.sample import Sample
-from ...domain.models.value_objects import SubmissionId, WorkflowStatus
+from ...domain.models.sample import Sample, Measurements
+from ...domain.models.value_objects import (
+    SubmissionId, SampleId, WorkflowStatus, Organism,
+    Concentration, Volume, QualityRatio
+)
 from ...domain.repositories.submission_repository import SubmissionRepository
 
 if TYPE_CHECKING:
@@ -61,84 +64,102 @@ class SubmissionService:
         if not pdf_path.exists():
             raise FileNotFoundError(f"PDF file not found: {pdf_path}")
         
-        # Extract data from PDF using legacy slurper for now
+        # Process PDF using the new PDF processor
         logger.info(f"Processing PDF: {pdf_path}")
         
-        # Use the legacy slurp functionality directly
-        from pdf_slurper.slurp import slurp_pdf
-        from pdf_slurper.hash_utils import sha256_file
+        # Process the PDF to extract data
+        pdf_data = await self.pdf_processor.process(pdf_path)
+        file_hash = pdf_data["file_hash"]
         
         # Check for existing submission if not forcing
         if not force:
-            file_hash = sha256_file(pdf_path)
             existing = await self.repository.find_by_hash(file_hash)
             if existing:
                 logger.info(f"Submission already exists: {existing.id}")
                 return existing
         
-        # Process the PDF using legacy slurper
-        result = slurp_pdf(pdf_path, force=force)
+        # Generate new submission ID
+        import uuid
+        submission_id = SubmissionId(str(uuid.uuid4()))
         
-        # Get the created submission from the legacy database
-        from pdf_slurper.db import open_session, Submission as LegacySubmission, Sample as LegacySample
-        from sqlmodel import select, func
+        # Create metadata from extracted PDF data
+        pdf_metadata = pdf_data.get("metadata", {})
+        metadata = SubmissionMetadata(
+            identifier=pdf_metadata.get("identifier", ""),
+            service_requested=pdf_metadata.get("service_requested", ""),
+            requester=pdf_metadata.get("requester", ""),
+            requester_email=pdf_metadata.get("requester_email"),
+            lab=pdf_metadata.get("lab", ""),
+            organism=Organism(
+                full_name=pdf_metadata.get("organism")
+            ) if pdf_metadata.get("organism") else None,
+            contains_human_dna=pdf_metadata.get("contains_human_dna"),
+            storage_location=storage_location
+        )
         
-        with open_session() as session:
-            legacy_sub = session.exec(
-                select(LegacySubmission).where(LegacySubmission.id == result.submission_id)
-            ).first()
+        # Create PDF source
+        pdf_source = PDFSource(
+            file_path=pdf_path,
+            file_hash=file_hash,
+            page_count=pdf_data.get("page_count", 0),
+            file_size=pdf_path.stat().st_size,
+            modification_time=datetime.fromtimestamp(pdf_path.stat().st_mtime)
+        )
+        
+        # Create samples from extracted data
+        samples = []
+        for sample_data in pdf_data.get("samples", []):
+            sample_id = SampleId(str(uuid.uuid4()))
             
-            if not legacy_sub:
-                raise ValueError(f"Failed to create submission from PDF")
+            # Get concentration from either qubit or nanodrop
+            qubit_conc = sample_data.get("qubit_ng_per_ul")
+            nanodrop_conc = sample_data.get("nanodrop_ng_per_ul") or sample_data.get("concentration")
             
-            # Get sample count
-            sample_count = session.exec(
-                select(func.count()).select_from(LegacySample).where(
-                    LegacySample.submission_id == legacy_sub.id
-                )
-            ).one()
-            
-            # Convert to new domain model
-            submission_id = SubmissionId(legacy_sub.id)
-            
-            # Create metadata
-            metadata = SubmissionMetadata(
-                identifier=legacy_sub.identifier,
-                service_requested=legacy_sub.service_requested,
-                requester=legacy_sub.requester,
-                requester_email=legacy_sub.requester_email,  # Just use string for now
-                lab=legacy_sub.lab,
-                organism=None,  # Would need to parse from source_organism
-                contains_human_dna=legacy_sub.human_dna == "Yes" if legacy_sub.human_dna else None,
-                storage_location=storage_location  # Store the provided location
+            measurements = Measurements(
+                qubit_concentration=Concentration(
+                    value=qubit_conc,
+                    unit="ng/µL"
+                ) if qubit_conc else None,
+                nanodrop_concentration=Concentration(
+                    value=nanodrop_conc,
+                    unit="ng/µL"
+                ) if nanodrop_conc else None,
+                volume=Volume(
+                    value=sample_data.get("volume_ul", 0),
+                    unit="µL"
+                ) if sample_data.get("volume_ul") else None,
+                a260_a280=QualityRatio(
+                    ratio_260_280=sample_data.get("a260_a280")
+                ) if sample_data.get("a260_a280") else None
             )
-            
-            # Create PDF source
-            pdf_source = PDFSource(
-                file_path=Path(legacy_sub.source_file),
-                file_hash=legacy_sub.source_sha256,
-                page_count=legacy_sub.page_count,
-                file_size=legacy_sub.source_size or 0,
-                modification_time=legacy_sub.source_mtime or 0
+            sample = Sample(
+                id=sample_id,
+                submission_id=submission_id,
+                name=sample_data.get("name", ""),
+                measurements=measurements
             )
-            
-            # Create submission with sample count
-            submission = Submission(
-                id=submission_id,
-                metadata=metadata,
-                pdf_source=pdf_source,
-                samples=[],  # Samples are in legacy DB
-                created_at=legacy_sub.created_at
-            )
-            
-            # Auto-apply QC if configured
-            if self.qc_auto_apply and sample_count > 0:
-                logger.info(f"Auto-applying QC to {sample_count} samples")
-                # QC would be applied in legacy system
-            
-            logger.info(f"Created submission: {submission.id}")
-            
-            return submission
+            samples.append(sample)
+        
+        # Create submission
+        submission = Submission(
+            id=submission_id,
+            metadata=metadata,
+            pdf_source=pdf_source,
+            samples=samples,
+            created_at=datetime.utcnow()
+        )
+        
+        # Save to repository
+        await self.repository.save(submission)
+        
+        # Auto-apply QC if configured
+        if self.qc_auto_apply and len(samples) > 0:
+            logger.info(f"Auto-applying QC to {len(samples)} samples")
+            # TODO: Implement QC application
+        
+        logger.info(f"Created submission: {submission.id} with {len(samples)} samples")
+        
+        return submission
     
     async def get_by_id(self, submission_id: SubmissionId) -> Optional[Submission]:
         """Get submission by ID.
@@ -319,75 +340,8 @@ class SubmissionService:
             logger.info(f"Deleted submission: {submission_id}")
         return result
     
-    async def _create_submission(self, extraction_result: Any) -> Submission:
-        """Create submission from extraction result."""
-        # For now, use the legacy slurp functionality
-        from pdf_slurper.slurp import slurp_pdf
-        from pathlib import Path
-        import uuid
-        
-        # If extraction_result is a Path, use the legacy slurp
-        if isinstance(extraction_result, Path):
-            # Call the legacy slurp function
-            result = slurp_pdf(extraction_result, force=True)
-            
-            # Get the created submission from the database
-            from pdf_slurper.db import open_session, Submission as LegacySubmission
-            with open_session() as session:
-                from sqlmodel import select
-                legacy_sub = session.exec(
-                    select(LegacySubmission).where(LegacySubmission.id == result.submission_id)
-                ).first()
-                
-                if legacy_sub:
-                    # Convert to new domain model
-                    submission_id = SubmissionId(legacy_sub.id)
-                    
-                    # Create metadata
-                    metadata = SubmissionMetadata(
-                        identifier=legacy_sub.identifier,
-                        service_requested=legacy_sub.service_requested,
-                        requester=legacy_sub.requester,
-                        requester_email=legacy_sub.requester_email,
-                        lab=legacy_sub.lab,
-                        organism=legacy_sub.source_organism,
-                        contains_human_dna=legacy_sub.human_dna == "Yes" if legacy_sub.human_dna else None
-                    )
-                    
-                    # Create PDF source
-                    pdf_source = PDFSource(
-                        file_path=Path(legacy_sub.source_file),
-                        file_hash=legacy_sub.source_sha256,
-                        page_count=legacy_sub.page_count
-                    )
-                    
-                    # Create submission
-                    submission = Submission(
-                        id=submission_id,
-                        metadata=metadata,
-                        pdf_source=pdf_source,
-                        samples=[],  # Samples are handled separately in legacy
-                        created_at=legacy_sub.created_at,
-                        updated_at=legacy_sub.updated_at
-                    )
-                    
-                    return submission
-        
-        # Fallback: create a minimal submission
-        submission_id = SubmissionId(f"sub_{uuid.uuid4().hex[:12]}")
-        metadata = SubmissionMetadata()
-        pdf_source = PDFSource(
-            file_path=extraction_result if isinstance(extraction_result, Path) else Path("/tmp/unknown.pdf"),
-            file_hash="",
-            page_count=0
-        )
-        
-        return Submission(
-            id=submission_id,
-            metadata=metadata,
-            pdf_source=pdf_source,
-            samples=[]
-        )
+    # Removed _create_submission method that used legacy code
+    # The create_from_pdf method now handles all submission creation
     
     async def _update_existing(
         self,

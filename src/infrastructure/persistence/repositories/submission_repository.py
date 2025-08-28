@@ -130,34 +130,7 @@ class SQLSubmissionRepository(SubmissionRepository):
         Returns:
             True if deleted, False if not found
         """
-        deleted_from_legacy = False
-        deleted_from_new = False
-        
-        # Try to delete from legacy database
-        try:
-            from pdf_slurper.db import open_session, Submission as LegacySubmission, Sample as LegacySample
-            from sqlmodel import select as legacy_select
-            
-            with open_session() as legacy_session:
-                # Find the legacy submission
-                legacy_stmt = legacy_select(LegacySubmission).where(LegacySubmission.id == str(id))
-                legacy_submission = legacy_session.exec(legacy_stmt).first()
-                
-                if legacy_submission:
-                    # Delete legacy samples
-                    sample_stmt = legacy_select(LegacySample).where(LegacySample.submission_id == str(id))
-                    for legacy_sample in legacy_session.exec(sample_stmt):
-                        legacy_session.delete(legacy_sample)
-                    
-                    # Delete legacy submission
-                    legacy_session.delete(legacy_submission)
-                    legacy_session.commit()
-                    logger.info(f"Deleted from legacy database: {id}")
-                    deleted_from_legacy = True
-        except Exception as e:
-            logger.warning(f"Failed to delete from legacy database: {e}")
-        
-        # Try to delete from new database
+        # Delete from new database only - legacy support removed
         with self.database.get_session() as session:
             orm = session.get(SubmissionORM, str(id))
             if orm:
@@ -170,11 +143,10 @@ class SQLSubmissionRepository(SubmissionRepository):
                 session.delete(orm)
                 session.commit()
                 
-                logger.info(f"Deleted from new database: {id}")
-                deleted_from_new = True
+                logger.info(f"Deleted submission: {id}")
+                return True
         
-        # Return True if deleted from either database
-        return deleted_from_legacy or deleted_from_new
+        return False
     
     async def exists(self, id: SubmissionId) -> bool:
         """Check if submission exists.

@@ -63,11 +63,11 @@ class Settings(BaseSettings):
     
     # Storage
     data_dir: Path = Field(
-        default=Path.home() / ".pdf_slurper",
+        default=Path("/app/data"),
         description="Data directory path"
     )
     upload_dir: Path = Field(
-        default=Path("/tmp/pdf_slurper/uploads"),
+        default=Path("/app/data/uploads"),
         description="Upload directory path"
     )
     max_upload_size: int = Field(
@@ -201,7 +201,7 @@ class Settings(BaseSettings):
             # Ensure absolute path for SQLite
             path = v.replace("sqlite:///", "")
             if not path.startswith("/"):
-                data_dir = info.data.get("data_dir", Path.home() / ".pdf_slurper")
+                data_dir = info.data.get("data_dir", Path("/app/data"))
                 path = str(data_dir / path)
                 v = f"sqlite:///{path}"
         return v
