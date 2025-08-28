@@ -40,13 +40,13 @@ class SQLSubmissionRepository(SubmissionRepository):
             Submission if found, None otherwise
         """
         with self.database.get_session() as session:
-            # Get submission
-            orm = session.get(SubmissionORM, id)
+            # Get submission - convert SubmissionId to string
+            orm = session.get(SubmissionORM, str(id))
             if not orm:
                 return None
             
-            # Get samples
-            stmt = select(SampleORM).where(SampleORM.submission_id == id)
+            # Get samples - convert SubmissionId to string
+            stmt = select(SampleORM).where(SampleORM.submission_id == str(id))
             samples = list(session.exec(stmt))
             
             # Map to domain
@@ -104,7 +104,7 @@ class SQLSubmissionRepository(SubmissionRepository):
                 
                 # Update samples
                 # Delete existing samples
-                stmt = select(SampleORM).where(SampleORM.submission_id == entity.id)
+                stmt = select(SampleORM).where(SampleORM.submission_id == str(entity.id))
                 for sample_orm in session.exec(stmt):
                     session.delete(sample_orm)
             else:
