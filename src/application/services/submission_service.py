@@ -326,6 +326,17 @@ class SubmissionService:
         """
         return await self.repository.get_statistics()
     
+    async def update(self, submission: Submission) -> Submission:
+        """Update an existing submission.
+        
+        Args:
+            submission: Updated submission
+            
+        Returns:
+            Updated submission
+        """
+        return await self.repository.save(submission)
+    
     async def delete(self, submission_id: SubmissionId) -> bool:
         """Delete submission.
         

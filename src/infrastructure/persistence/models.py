@@ -42,6 +42,7 @@ class SubmissionORM(SQLModel, table=True):
     phone: Optional[str] = None
     lab: Optional[str] = Field(default=None, index=True)
     billing_address: Optional[str] = None
+    storage_location: Optional[str] = None  # Storage location for samples
     pis: Optional[str] = None  # JSON string
     financial_contacts: Optional[str] = None  # JSON string
     request_summary: Optional[str] = None

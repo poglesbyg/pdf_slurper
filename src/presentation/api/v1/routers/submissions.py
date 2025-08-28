@@ -309,13 +309,19 @@ async def get_submission_samples(
 ):
     """Get samples for a submission."""
     try:
-        # Get samples from legacy database
-        from pdf_slurper.db import open_session, Sample as LegacySample
-        from sqlmodel import select
+        # Get submission from repository
+        submission = await container.submission_service.get_by_id(
+            SubmissionId(submission_id)
+        )
         
-        with open_session() as session:
-            stmt = select(LegacySample).where(
-                LegacySample.submission_id == submission_id
+        if not submission:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Submission not found: {submission_id}"
+            )
+        
+        # Get samples from submission
+        legacy_samples = submission.samples if hasattr(submission, 'samples') else []
             ).offset(offset).limit(limit)
             
             samples = session.exec(stmt).all()
@@ -472,68 +478,56 @@ async def update_submission(
 ) -> SubmissionResponse:
     """Update submission metadata."""
     try:
-        # Get existing submission from legacy database
-        from pdf_slurper.db import open_session, Submission as LegacySubmission, Sample as LegacySample
-        from sqlmodel import select, func
+        # Get existing submission from repository
+        submission = await container.submission_service.get_by_id(
+            SubmissionId(submission_id)
+        )
         
-        with open_session() as session:
-            legacy_sub = session.exec(
-                select(LegacySubmission).where(LegacySubmission.id == submission_id)
-            ).first()
-            
-            if not legacy_sub:
-                raise HTTPException(status_code=404, detail="Submission not found")
-            
-            # Update fields if provided
-            update_dict = request.dict(exclude_unset=True)
-            for field, value in update_dict.items():
-                if hasattr(legacy_sub, field):
-                    setattr(legacy_sub, field, value)
-            
-            # Special handling for storage_location - store it in the notes field
-            if "storage_location" in update_dict:
-                # Store location in notes field as JSON
-                import json
-                notes = json.loads(legacy_sub.notes or "{}")
-                notes["storage_location"] = update_dict["storage_location"]
-                legacy_sub.notes = json.dumps(notes)
-            
-            session.add(legacy_sub)
-            session.commit()
-            session.refresh(legacy_sub)
-            
-            # Get sample count
-            sample_count = session.exec(
-                select(func.count()).select_from(LegacySample).where(
-                    LegacySample.submission_id == legacy_sub.id
-                )
-            ).one()
-            
-            # Extract storage location from notes
-            notes = json.loads(legacy_sub.notes or "{}")
-            storage_location = notes.get("storage_location")
-            
-            return SubmissionResponse(
-                id=legacy_sub.id,
-                created_at=legacy_sub.created_at,
-                updated_at=legacy_sub.created_at,  # Legacy DB doesn't have updated_at
-                sample_count=sample_count,
-                metadata=SubmissionMetadataResponse(
-                    identifier=legacy_sub.identifier,
-                    service_requested=legacy_sub.service_requested,
-                    requester=legacy_sub.requester,
-                    requester_email=legacy_sub.requester_email,
-                    lab=legacy_sub.lab,
-                    organism=legacy_sub.source_organism,
-                    contains_human_dna=legacy_sub.human_dna == "Yes" if legacy_sub.human_dna else None,
-                    storage_location=storage_location
-                ),
-                pdf_source={
-                    "file_path": legacy_sub.source_file,
-                    "file_hash": legacy_sub.source_sha256,
-                    "page_count": legacy_sub.page_count
-                }
+        if not submission:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Submission not found: {submission_id}"
             )
+        
+        # Update metadata fields if provided
+        update_dict = request.dict(exclude_unset=True)
+        
+        # Update submission metadata
+        if update_dict:
+            # Update storage_location if provided
+            if "storage_location" in update_dict:
+                submission.metadata.storage_location = update_dict["storage_location"]
+            
+            # Update other metadata fields
+            for field in ["identifier", "service_requested", "requester", "requester_email", "lab"]:
+                if field in update_dict:
+                    setattr(submission.metadata, field, update_dict[field])
+            
+            # Save updated submission
+            await container.submission_service.update(submission)
+        
+        # Return updated submission
+        return SubmissionResponse(
+            id=submission.id,
+            created_at=submission.created_at,
+            updated_at=submission.updated_at if hasattr(submission, 'updated_at') else submission.created_at,
+            sample_count=len(submission.samples) if hasattr(submission, 'samples') else submission.sample_count,
+            metadata=SubmissionMetadataResponse(
+                identifier=submission.metadata.identifier,
+                service_requested=submission.metadata.service_requested,
+                requester=submission.metadata.requester,
+                requester_email=submission.metadata.requester_email,
+                lab=submission.metadata.lab,
+                organism=submission.metadata.organism.full_name if submission.metadata.organism else None,
+                contains_human_dna=submission.metadata.contains_human_dna,
+                storage_location=submission.metadata.storage_location
+            ),
+            pdf_source={
+                "file_path": str(submission.pdf_source.file_path),
+                "file_hash": submission.pdf_source.file_hash,
+                "page_count": submission.pdf_source.page_count
+            }
+        )
             
     except HTTPException:
         raise
@@ -555,7 +549,7 @@ async def create_sample(
 ) -> SampleResponse:
     """Create a new sample for a submission."""
     try:
-        from pdf_slurper.db import open_session, Sample as LegacySample, Submission as LegacySubmission
+        # Stub implementation - sample creation not fully implemented in new system
         from sqlmodel import select
         import uuid
         
@@ -637,7 +631,7 @@ async def get_sample(
 ) -> SampleResponse:
     """Get sample details."""
     try:
-        from pdf_slurper.db import open_session, Sample as LegacySample
+        # Stub implementation - sample details not fully implemented in new system
         from sqlmodel import select
         import json
         
@@ -689,7 +683,7 @@ async def update_sample(
 ) -> SampleResponse:
     """Update sample data."""
     try:
-        from pdf_slurper.db import open_session, Sample as LegacySample
+        # Stub implementation - sample update not fully implemented in new system
         from sqlmodel import select
         import json
         
@@ -756,7 +750,7 @@ async def delete_sample(
 ):
     """Delete a sample."""
     try:
-        from pdf_slurper.db import open_session, Sample as LegacySample
+        # Stub implementation - sample deletion not fully implemented in new system
         from sqlmodel import select
         
         with open_session() as session:
