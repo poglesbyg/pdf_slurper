@@ -6,16 +6,43 @@ from pydantic import BaseModel, Field, ConfigDict
 
 
 class SubmissionMetadataResponse(BaseModel):
-    """Submission metadata response schema."""
+    """Submission metadata response schema - enhanced with all fields."""
     
+    # Basic identification
     identifier: Optional[str] = None
+    
+    # Service information
     service_requested: Optional[str] = None
+    as_of: Optional[str] = None
+    expires_on: Optional[str] = None
+    request_summary: Optional[str] = None
+    forms_text: Optional[str] = None
+    
+    # Contact information
     requester: Optional[str] = None
     requester_email: Optional[str] = None
+    phone: Optional[str] = None
     lab: Optional[str] = None
+    pis: Optional[str] = None
+    financial_contacts: Optional[str] = None
+    
+    # Billing
+    billing_address: Optional[str] = None
+    
+    # Sample information
+    will_submit_dna_for: Optional[str] = None
+    type_of_sample: Optional[str] = None
+    human_dna: Optional[str] = None
+    source_organism: Optional[str] = None
+    sample_buffer: Optional[str] = None
+    
+    # Legacy compatibility
     organism: Optional[str] = None
     contains_human_dna: Optional[bool] = None
+    
+    # Storage and tracking
     storage_location: Optional[str] = None
+    notes: Optional[str] = None
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -98,20 +125,6 @@ class UpdateSubmissionRequest(BaseModel):
     lab: Optional[str] = Field(None, description="Laboratory")
     organism: Optional[str] = Field(None, description="Organism")
     storage_location: Optional[str] = Field(None, description="Storage location")
-    contains_human_dna: Optional[bool] = Field(None, description="Contains human DNA")
-
-
-class SampleRequest(BaseModel):
-    """Sample create/update request schema."""
-    
-    name: str = Field(..., description="Sample name")
-    volume_ul: Optional[float] = Field(None, description="Volume in microliters")
-    qubit_ng_per_ul: Optional[float] = Field(None, description="Qubit concentration (ng/µL)")
-    nanodrop_ng_per_ul: Optional[float] = Field(None, description="Nanodrop concentration (ng/µL)")
-    a260_a280: Optional[float] = Field(None, description="A260/A280 ratio")
-    a260_a230: Optional[float] = Field(None, description="A260/A230 ratio")
-    status: Optional[str] = Field("pending", description="Sample status")
-    notes: Optional[str] = Field(None, description="Additional notes")
 
 
 class SampleResponse(BaseModel):
@@ -119,18 +132,27 @@ class SampleResponse(BaseModel):
     
     id: str
     submission_id: str
-    name: str
-    volume_ul: Optional[float]
-    qubit_ng_per_ul: Optional[float]
-    nanodrop_ng_per_ul: Optional[float]
-    a260_a280: Optional[float]
-    a260_a230: Optional[float]
-    status: str
-    notes: Optional[str]
-    created_at: datetime
-    updated_at: datetime
+    name: Optional[str] = None
+    volume_ul: Optional[float] = None
+    qubit_ng_per_ul: Optional[float] = None
+    nanodrop_ng_per_ul: Optional[float] = None
+    a260_a280: Optional[float] = None
+    a260_a230: Optional[float] = None
+    status: Optional[str] = Field(default="received")
+    qc_status: Optional[str] = Field(default="pending")
     
     model_config = ConfigDict(from_attributes=True)
+
+
+class UpdateSampleRequest(BaseModel):
+    """Update sample request schema."""
+    
+    volume_ul: Optional[float] = None
+    qubit_ng_per_ul: Optional[float] = None
+    nanodrop_ng_per_ul: Optional[float] = None
+    a260_a280: Optional[float] = None
+    a260_a230: Optional[float] = None
+    status: Optional[str] = None
 
 
 class SampleListResponse(BaseModel):
@@ -140,17 +162,3 @@ class SampleListResponse(BaseModel):
     total: int
     offset: int
     limit: int
-
-
-class StatisticsResponse(BaseModel):
-    """Statistics response schema."""
-    
-    total_submissions: int
-    total_samples: int
-    workflow_status: Dict[str, int]
-    qc_status: Dict[str, int]
-    average_concentration: Optional[float]
-    average_volume: Optional[float]
-    average_quality_score: Optional[float]
-    samples_with_location: int
-    samples_processed: int
