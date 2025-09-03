@@ -1,53 +1,61 @@
 ---
-description: Documents data flow from PDF upload through processing pipeline to final storage
+description: Data flow documentation for laboratory sample processing system focusing on PDF upload through QC and storage
 ---
 
 
-# Data Flow
+# Data-flow
 
-## Primary Data Pipeline
+## Primary Data Flow Sequence
 
 1. PDF Upload & Initial Processing
-- Location: src/infrastructure/pdf/processor.py
-- PDF submissions received through web interface
-- Raw PDF parsed for laboratory sample tables and metadata
-- Extracts concentration, volume, quality metrics
-Importance Score: 85
+- Path: src/infrastructure/pdf/processor.py
+- PDF laboratory report uploaded via web interface
+- Specialized PDF parser extracts:
+  * Sample tables with concentrations and volumes
+  * Quality ratios (A260/A280, A260/230)
+  * Laboratory metadata and requester information
+Importance Score: 85/100
 
-2. Data Transformation
-- Location: src/domain/models/sample.py
-- Raw extracted values mapped to domain entities
-- QC thresholds applied:
-  - Concentration validation (ng/µL)
-  - Volume requirements (µL)
-  - A260/A280 ratio analysis
-- Quality scores calculated
-Importance Score: 90
+2. Sample Data Transformation
+- Path: src/domain/models/sample.py
+- Raw PDF data converted to domain objects
+- Applies laboratory-specific validations:
+  * Concentration thresholds 
+  * Volume requirements
+  * Quality ratio specifications
+- Generates normalized quality scores
+Importance Score: 90/100
 
-3. Domain Processing
-- Location: src/domain/models/submission.py
-- Sample data grouped into submissions
-- Workflow state tracking:
-  - received → processing → sequenced → completed
-- Laboratory metadata enrichment:
-  - Human DNA flags
-  - Organism classification
-  - Service requirements
-Importance Score: 80
+3. Quality Control Processing
+- Path: src/domain/services/submission_service.py
+- Executes multi-stage QC workflow:
+  * Concentration validation
+  * Volume validation  
+  * Quality ratio assessment
+- Produces QC status (PASS/WARNING/FAIL)
+- Updates sample workflow state
+Importance Score: 85/100
 
-4. Storage Layer
-- Location: src/infrastructure/persistence/repositories/submission_repository.py
-- Final validated data persisted
-- Maintains submission history
-- Tracks sample locations and processing status
-Importance Score: 75
+4. Storage & Persistence
+- Path: src/infrastructure/persistence/models.py
+- Records final sample data with:
+  * QC results
+  * Storage location assignments
+  * Processing history
+  * Workflow state
+- Maintains audit trail of status changes
+Importance Score: 75/100
 
-## Legacy Integration Flow
-- Location: src/adapter.py
-- Parallel processing during transition
-- Legacy PDF processor compatibility
-- Dual-database synchronization
-Importance Score: 70
+## Data Transformations
+
+Key Measurement Conversions:
+- Concentration units (ng/µL)
+- Volume standardization (µL)
+- Quality ratio normalization
+- Storage location encoding (Freezer/Shelf/Box/Position)
+
+Sample Status Transitions:
+RECEIVED → PROCESSING → SEQUENCED → COMPLETED
 
 $END$
 

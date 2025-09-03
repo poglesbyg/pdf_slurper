@@ -10,60 +10,55 @@
 - Explain your OBSERVATIONS clearly, then provide REASONING to identify the exact issue. Add console logs when needed to gather more information.
 
 
-The system implements a laboratory sample processing pipeline with specialized PDF extraction and quality control workflows.
+## Laboratory Information Management System
 
-## Core Business Components
+Core business logic centers around three primary domains:
 
-### Sample Processing Pipeline
-Location: `src/infrastructure/pdf/processor.py`
-- Extracts laboratory data from standardized PDF forms
-- Processes concentration, volume and quality measurements
-- Maps extracted data to domain models
-Importance Score: 85
+### 1. PDF Laboratory Data Extraction
+**Importance Score: 85/100**
 
-### Quality Control System
-Location: `src/domain/models/sample.py`
-- Enforces laboratory QC thresholds:
-  - Minimum concentration requirements (ng/µL)
-  - Volume thresholds (µL)
-  - A260/A280 quality ratio validation
-- Calculates quality scores and failure reasons
-Importance Score: 90
+Located in `src/infrastructure/pdf/processor.py` and `pdf_slurper/slurp.py`
 
-### Laboratory Workflow Management  
-Location: `src/domain/models/submission.py`
-- Controls sample states (received, processing, sequenced)
-- Manages laboratory metadata:
-  - Human DNA detection
-  - Organism classification
-  - Service requirements
-Importance Score: 80
+Specialized parsing of laboratory documents:
+- Scientific measurement extraction (concentrations, volumes, quality ratios)
+- Sample table identification across multi-page reports
+- Laboratory metadata parsing for submissions
+- Standardized mapping of extracted data to domain models
 
-### Measurement Processing
-Location: `src/domain/models/value_objects.py`
-- Validates concentration measurements with units
-- Processes volume thresholds
-- Handles quality ratio acceptable ranges
-- Tracks storage location hierarchy
-Importance Score: 70
+### 2. Sample Quality Control Processing
+**Importance Score: 90/100**
 
-## Domain Integration Points
+Located in `src/domain/models/sample.py`
 
-### Table Header Recognition
-Location: `pdf_slurper/mapping.py`
-- Normalizes variant laboratory column headers
-- Matches fuzzy header terminology
-- Processes specialized unit notations
-Importance Score: 75
+Multi-factor quality assessment system:
+- Concentration validation (Qubit/Nanodrop measurements)
+- Volume threshold verification
+- DNA quality ratio analysis (A260/A280, A260/230)
+- Automated quality scoring with pass/fail determination
+- Sample status workflow management
+- Laboratory storage tracking
 
-### Quality Control Workflow
-Location: `pdf_slurper/db.py`
-- Implements pass/warning/fail status tracking
-- Manages QC threshold validations
-- Processes sample group batches
-Importance Score: 80
+### 3. Laboratory Submission Management
+**Importance Score: 85/100**
 
-The system specializes in laboratory sample management with emphasis on standardized measurement processing, quality control enforcement, and workflow tracking specific to genetic/molecular biology operations.
+Located in `src/domain/models/submission.py`
+
+Specialized submission handling:
+- Batch quality control processing
+- Scientific measurement aggregation
+- Laboratory workflow state management
+- Sample organization tracking
+- Statistical analysis of quality metrics
+- Storage location management
+- Expiration tracking
+
+The system implements domain-specific logic for laboratory sample processing, with emphasis on:
+- Quality control thresholds
+- Scientific measurement validation
+- Laboratory workflow transitions
+- Sample storage tracking
+- PDF data extraction rules
+- Comprehensive audit trails
 
 $END$
 

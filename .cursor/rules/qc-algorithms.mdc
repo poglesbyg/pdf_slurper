@@ -1,57 +1,74 @@
 ---
-description: Documents core quality control algorithms and threshold calculations for laboratory sample processing and validation
+description: Documentation of laboratory sample quality control algorithms including thresholds, scoring formulas, and batch processing logic
 ---
 
 
 # qc-algorithms
 
-## Core QC Algorithms
-
+## Quality Control Processing Core
 Location: src/domain/models/sample.py
-Importance Score: 90
 
-### Threshold Validation System
-- Enforces laboratory QC thresholds:
-  - Minimum concentration checks (ng/µL)
-  - Volume requirements (µL) per sample type
-  - A260/A280 ratio validation for nucleic acid purity
-  - A260/A230 contamination detection
+Quality control evaluation system implements multi-factor analysis:
 
-### Quality Score Calculation
-- Multi-parameter scoring incorporating:
-  - Raw concentration values
-  - Volume measurements
-  - Purity ratios
-  - Sample type specific modifiers
+1. Concentration Assessment
+- Primary measurement via Qubit readings
+- Secondary validation through Nanodrop values 
+- Configurable minimum threshold (default 10.0 ng/µL)
+- Automated quality grade assignment (A-F)
 
-### Batch Processing Logic
-Location: src/domain/models/submission.py
-Importance Score: 85
+2. Volume Validation
+- Minimum volume requirements (default 20.0 µL)
+- Storage capacity constraints
+- Container type specific thresholds
 
-- Validates sample groups against collective thresholds
-- Manages aggregate quality scores for batch submissions
-- Implements failure cascading rules for grouped samples
-- Tracks QC status with detailed failure reasons
+3. Quality Ratio Analysis 
+- A260/280 ratio validation (acceptable range 1.8-2.0)
+- A260/230 secondary purity check
+- Automated flagging of out-of-range samples
 
-### Domain-Specific QC Rules
+Importance Score: 95/100
+
+## Quality Scoring Algorithm
 Location: src/infrastructure/pdf/processor.py
-Importance Score: 80
 
-- Laboratory-specific measurement validation:
-  - Qubit vs Nanodrop concentration reconciliation
-  - Unit standardization and conversion
-  - Scientific notation parsing
-  - Measurement precision requirements
+Calculates normalized quality scores (0-100) using weighted factors:
 
-### Quality Control Workflow
-- Sequential validation stages:
-  1. Raw measurement validation
-  2. Type-specific threshold checks
-  3. Ratio analysis
-  4. Aggregate quality scoring
-  5. Pass/Warning/Fail determination
+1. Primary Metrics
+- Concentration weight: 40%
+- Volume adequacy: 30%
+- Quality ratios: 30%
 
-The QC system implements specialized laboratory requirements for genetic/molecular biology sample validation with emphasis on measurement accuracy and sample quality assurance.
+2. Status Classifications
+- PASS: Score >= 80
+- WARNING: Score 60-79
+- FAIL: Score < 60
+
+3. Batch Processing Logic
+- Aggregated QC results for submission sets
+- Statistical outlier detection
+- Cross-validation between samples
+- Automated flagging of anomalous results
+
+Importance Score: 85/100
+
+## Sample Status Workflow
+Location: src/domain/models/submission.py
+
+Manages laboratory sample progression:
+
+1. State Transitions
+- RECEIVED → Initial QC
+- PROCESSING → Active Analysis
+- SEQUENCED → Data Generation
+- COMPLETED → Final QC Review
+
+2. Quality Control Gates
+- Entry criteria for each stage
+- Required QC metrics per transition
+- Validation rules for progression
+- Rollback handling for failed QC
+
+Importance Score: 80/100
 
 $END$
 

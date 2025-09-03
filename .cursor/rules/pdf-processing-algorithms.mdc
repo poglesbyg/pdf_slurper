@@ -1,57 +1,53 @@
 ---
-description: Technical specification for PDF processing algorithms, metadata extraction, and table detection in laboratory sample processing
+description: Specialized algorithms for extracting and processing laboratory sample data from PDF documents
 ---
 
 
 # pdf-processing-algorithms
 
-## PDF Sample Data Extraction
-Importance Score: 85
+## PDF Laboratory Data Extraction
+Path: pdf_slurper/slurp.py
+Importance Score: 90/100
 
-Key Components:
-1. Table Structure Detection
-- Laboratory-specific table recognition patterns 
-- Custom header mapping for standardizing different table formats
-- Detection of sample data grids containing concentration/volume metrics
+Core algorithms for processing laboratory sample PDFs:
 
-2. Metadata Extraction
-- Requester information parsing
-- Laboratory details identification
-- Service request categorization
-- Sample submission form validation
+1. Metadata Extraction
+- Parses standardized lab form fields for requester details, service types
+- Extracts DNA/RNA sample specifications and buffer information
+- Maps form metadata to domain-specific submission schema
 
-3. Header Normalization System
-- Domain-specific column header standardization
-- Fuzzy matching for variant headers like "qubit conc", "nanodrop conc"
-- Laboratory unit notation parsing (µL, ng/µL)
+2. Table Detection & Processing
+- Identifies sample data tables using laboratory-specific header patterns
+- Normalizes column headers for concentration, volume, quality metrics
+- Maps extracted table data to standardized sample records
 
-4. Data Transformation Pipeline
-Located in: pdf_slurper/slurp.py
-- Extracts raw tabular data from PDF forms
-- Maps column headers to standardized fields
-- Validates measurement units and formats
-- Converts extracted data into domain models
+3. Quality Measurements Processing
+- Extracts concentration values (ng/µL) from Qubit/Nanodrop readings
+- Parses A260/280 and A260/230 ratios for nucleic acid purity
+- Validates measurement formats against lab-specific patterns
 
-## Quality Control Integration
-Importance Score: 80
+## Laboratory QC Processing
+Path: src/infrastructure/pdf/processor.py
+Importance Score: 85/100
 
-The PDF processing algorithms integrate with QC workflows through:
-- Detection of concentration measurements (Qubit/Nanodrop)
-- Extraction of quality ratios (A260/A280, A260/A230)
-- Volume measurement parsing with unit validation
-- Automated flagging of out-of-range values
+1. Quality Control Validation
+- Evaluates sample measurements against configurable thresholds:
+  - Minimum concentration requirements
+  - Volume specifications
+  - Quality ratio acceptance ranges
+- Assigns QC status based on laboratory criteria
 
-Primary Components:
-pdf_slurper/mapping.py
-- Header standardization rules
-- Unit conversion mappings
-- Laboratory-specific data format recognition
+2. Metadata Validation
+- Verifies presence of required laboratory submission fields
+- Validates sample type classifications
+- Confirms human DNA presence flags
 
-pdf_slurper/slurp.py
-- Core PDF parsing engine
-- Table structure detection
-- Data extraction pipeline
-- Quality metric identification
+3. Sample Data Transformation
+- Standardizes measurement units
+- Normalizes quality ratios
+- Maps extracted values to domain models
+
+The algorithms focus specifically on laboratory sample data processing from standardized PDF forms, with emphasis on quality control validation and measurement standardization for DNA/RNA samples.
 
 $END$
 

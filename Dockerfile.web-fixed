@@ -1,0 +1,36 @@
+# Web UI Dockerfile - Fixed version without heredoc
+FROM nginx:alpine
+
+# Install curl for health checks
+RUN apk add --no-cache curl
+
+# Remove default nginx config
+RUN rm -f /etc/nginx/conf.d/default.conf
+
+# Copy nginx configuration
+COPY nginx/nginx.conf /etc/nginx/conf.d/app.conf
+
+# Create directory for static files
+RUN mkdir -p /usr/share/nginx/html
+
+# Copy static HTML files
+COPY web-static/*.html /usr/share/nginx/html/
+
+# Create a simple submission detail page
+COPY web-static/submissions.html /usr/share/nginx/html/submission.html
+
+# Fix permissions for OpenShift
+RUN chgrp -R 0 /usr/share/nginx/html /var/cache/nginx /var/log/nginx /var/run && \
+    chmod -R g=u /usr/share/nginx/html /var/cache/nginx /var/log/nginx /var/run && \
+    sed -i 's/listen       80;/listen       8080;/g' /etc/nginx/nginx.conf && \
+    sed -i 's/user  nginx;/#user  nginx;/g' /etc/nginx/nginx.conf
+
+# Expose port
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8080/ || exit 1
+
+# Run nginx
+CMD ["nginx", "-g", "daemon off;"]

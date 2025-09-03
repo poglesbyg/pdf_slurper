@@ -11,6 +11,10 @@ import os
 
 from src.application.container import Container
 
+# Legacy imports still needed for sample operations
+from pdf_slurper.db import Submission as LegacySubmission, Sample as LegacySample, open_session
+from sqlmodel import select, func
+
 def get_container_dependency():
     """Get container dependency for FastAPI."""
     # This would be properly initialized in production
@@ -320,9 +324,14 @@ async def get_submission_samples(
                 detail=f"Submission not found: {submission_id}"
             )
         
-        # Get samples from submission
-        legacy_samples = submission.samples if hasattr(submission, 'samples') else []
-            ).offset(offset).limit(limit)
+        # Get samples from submission using legacy database
+        with open_session() as session:
+            stmt = (
+                select(LegacySample)
+                .where(LegacySample.submission_id == submission_id)
+                .offset(offset)
+                .limit(limit)
+            )
             
             samples = session.exec(stmt).all()
             
@@ -337,7 +346,7 @@ async def get_submission_samples(
                     "nanodrop_ng_per_ul": sample.nanodrop_ng_per_ul,
                     "a260_a280": sample.a260_a280,
                     "a260_a230": sample.a260_a230,
-                    "status": "pending",  # Default status
+                    "status": sample.status or "pending",  # Use stored status or default
                     "row_index": sample.row_index,
                     "table_index": sample.table_index,
                     "page_index": sample.page_index
