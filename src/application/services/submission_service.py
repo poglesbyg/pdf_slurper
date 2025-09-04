@@ -155,7 +155,16 @@ class SubmissionService:
             type_of_sample=pdf_metadata.get("type_of_sample"),
             sample_buffer=pdf_metadata.get("sample_buffer"),
             source_organism=pdf_metadata.get("source_organism"),
-            notes=pdf_metadata.get("notes")
+            notes=pdf_metadata.get("notes"),
+            # Flow Cell and Sequencing Parameters
+            flow_cell_type=pdf_metadata.get("flow_cell_type"),
+            genome_size=pdf_metadata.get("genome_size"),
+            coverage_needed=pdf_metadata.get("coverage_needed"),
+            flow_cells_count=pdf_metadata.get("flow_cells_count"),
+            # Bioinformatics and Data Delivery
+            basecalling=pdf_metadata.get("basecalling"),
+            file_format=pdf_metadata.get("file_format"),
+            data_delivery=pdf_metadata.get("data_delivery")
         )
         
         # Create PDF source

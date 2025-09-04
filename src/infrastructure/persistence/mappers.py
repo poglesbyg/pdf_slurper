@@ -72,7 +72,15 @@ class DomainMapper:
             source_organism=metadata.organism.species if metadata.organism else None,
             human_dna="Yes" if metadata.contains_human_dna else "No" if metadata.contains_human_dna is not None else None,
             sample_buffer_json=metadata.sample_buffer,
-            type_of_sample_json=metadata.submission_type
+            type_of_sample_json=metadata.submission_type,
+            # New fields for flow cell and bioinformatics
+            flow_cell_type=metadata.flow_cell_type,
+            genome_size=metadata.genome_size,
+            coverage_needed=metadata.coverage_needed,
+            flow_cells_count=metadata.flow_cells_count,
+            basecalling=metadata.basecalling,
+            file_format=metadata.file_format,
+            data_delivery=metadata.data_delivery
         )
         
         return orm
@@ -110,7 +118,21 @@ class DomainMapper:
             organism=DomainMapper._parse_organism(orm.source_organism),
             contains_human_dna=orm.human_dna == "Yes" if orm.human_dna else None,
             sample_buffer=orm.sample_buffer_json,
-            submission_type=orm.type_of_sample_json
+            submission_type=orm.type_of_sample_json,
+            # Additional extracted fields
+            will_submit_dna_for=orm.will_submit_dna_for,
+            type_of_sample=orm.type_of_sample,
+            source_organism=orm.source_organism,
+            notes=orm.notes,
+            # Flow Cell and Sequencing Parameters
+            flow_cell_type=orm.flow_cell_type,
+            genome_size=orm.genome_size,
+            coverage_needed=orm.coverage_needed,
+            flow_cells_count=orm.flow_cells_count,
+            # Bioinformatics and Data Delivery
+            basecalling=orm.basecalling,
+            file_format=orm.file_format,
+            data_delivery=orm.data_delivery
         )
         
         # Create PDF source

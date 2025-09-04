@@ -58,6 +58,17 @@ class SubmissionORM(SQLModel, table=True):
     sample_buffer: Optional[str] = Field(default=None)
     notes: Optional[str] = Field(default=None, max_length=None)
     
+    # Flow Cell and Sequencing Parameters
+    flow_cell_type: Optional[str] = Field(default=None, max_length=200)
+    genome_size: Optional[str] = Field(default=None, max_length=100)
+    coverage_needed: Optional[str] = Field(default=None, max_length=100)
+    flow_cells_count: Optional[str] = Field(default=None, max_length=50)
+    
+    # Bioinformatics and Data Delivery
+    basecalling: Optional[str] = Field(default=None, max_length=200)
+    file_format: Optional[str] = Field(default=None, max_length=200)
+    data_delivery: Optional[str] = Field(default=None, max_length=300)
+    
     # Relationships
     samples: List["SampleORM"] = Relationship(
         back_populates="submission",

@@ -50,28 +50,29 @@
                 <!-- Header -->
                 <div class="mb-6">
                     <a href="/submissions" class="text-indigo-600 hover:text-indigo-900 text-sm">← Back to Submissions</a>
-                    <h2 class="mt-4 text-2xl font-bold text-gray-900">Submission Details</h2>
+                    <div class="mt-4 flex items-center justify-between">
+                        <div>
+                            <h2 class="text-2xl font-bold text-gray-900">
+                                <span x-text="submission?.metadata?.identifier || 'Submission'"></span> Details
+                            </h2>
+                            <p class="mt-1 text-sm text-gray-600" x-text="submission?.metadata?.service_requested || ''"></p>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-lg font-semibold text-indigo-600" x-text="submission?.metadata?.storage_location || '-'"></div>
+                            <div class="text-xs text-gray-500">Storage Location</div>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Submission Info -->
+                <!-- Project Information -->
                 <div class="bg-white shadow rounded-lg p-6 mb-6">
-                    <h3 class="text-lg font-medium text-gray-900 mb-4">Submission Information</h3>
-                    <dl class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                        <span class="text-indigo-500 mr-2">🔬</span> Project Information
+                    </h3>
+                    <dl class="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
-                            <dt class="text-sm font-medium text-gray-500">Submission ID</dt>
-                            <dd class="mt-1 text-sm text-gray-900" x-text="submission?.id || '-'"></dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">Storage Location</dt>
-                            <dd class="mt-1 text-sm text-gray-900 font-semibold text-indigo-600" x-text="submission?.metadata?.storage_location || '-'"></dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">Requester</dt>
-                            <dd class="mt-1 text-sm text-gray-900" x-text="submission?.metadata?.requester || '-'"></dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">Lab</dt>
-                            <dd class="mt-1 text-sm text-gray-900" x-text="submission?.metadata?.lab || '-'"></dd>
+                            <dt class="text-sm font-medium text-gray-500">Project ID</dt>
+                            <dd class="mt-1 text-sm text-gray-900 font-semibold" x-text="submission?.metadata?.identifier || '-'"></dd>
                         </div>
                         <div>
                             <dt class="text-sm font-medium text-gray-500">Service Requested</dt>
@@ -84,10 +85,177 @@
                     </dl>
                 </div>
 
+                <!-- Contact Information -->
+                <div class="bg-white shadow rounded-lg p-6 mb-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                        <span class="text-blue-500 mr-2">👤</span> Contact Information
+                    </h3>
+                    <dl class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Requester</dt>
+                            <dd class="mt-1 text-sm text-gray-900" x-text="submission?.metadata?.requester || '-'"></dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Email</dt>
+                            <dd class="mt-1 text-sm text-gray-900">
+                                <a :href="'mailto:' + (submission?.metadata?.requester_email || '')" 
+                                   class="text-indigo-600 hover:text-indigo-900"
+                                   x-text="submission?.metadata?.requester_email || '-'"></a>
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Laboratory</dt>
+                            <dd class="mt-1 text-sm text-gray-900" x-text="submission?.metadata?.lab || '-'"></dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Phone</dt>
+                            <dd class="mt-1 text-sm text-gray-900" x-text="submission?.metadata?.phone || '-'"></dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">PIs</dt>
+                            <dd class="mt-1 text-sm text-gray-900" x-text="submission?.metadata?.pis || '-'"></dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Financial Contacts</dt>
+                            <dd class="mt-1 text-sm text-gray-900" x-text="submission?.metadata?.financial_contacts || '-'"></dd>
+                        </div>
+                    </dl>
+                </div>
+
+                <!-- Sample Information -->
+                <div class="bg-white shadow rounded-lg p-6 mb-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                        <span class="text-green-500 mr-2">🧬</span> Sample Information
+                    </h3>
+                    <dl class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Source Organism</dt>
+                            <dd class="mt-1 text-sm text-gray-900" x-text="submission?.metadata?.source_organism || submission?.metadata?.organism || '-'"></dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Contains Human DNA</dt>
+                            <dd class="mt-1 text-sm">
+                                <span x-show="submission?.metadata?.human_dna === 'Yes' || submission?.metadata?.contains_human_dna === true" 
+                                      class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                    Yes - Human DNA Present
+                                </span>
+                                <span x-show="submission?.metadata?.human_dna === 'No' || submission?.metadata?.contains_human_dna === false" 
+                                      class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                    No - No Human DNA
+                                </span>
+                                <span x-show="!submission?.metadata?.human_dna && submission?.metadata?.contains_human_dna === null" 
+                                      class="text-gray-500">-</span>
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Sample Buffer</dt>
+                            <dd class="mt-1 text-sm text-gray-900" x-text="submission?.metadata?.sample_buffer || '-'"></dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Storage Location</dt>
+                            <dd class="mt-1 text-sm text-gray-900 font-semibold text-indigo-600" x-text="submission?.metadata?.storage_location || '-'"></dd>
+                        </div>
+                    </dl>
+                </div>
+
+                <!-- DNA Submission Details -->
+                <div class="bg-white shadow rounded-lg p-6 mb-6" x-show="submission?.metadata?.will_submit_dna_for || submission?.metadata?.type_of_sample">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                        <span class="text-purple-500 mr-2">💉</span> DNA Submission Details
+                    </h3>
+                    <div class="space-y-4">
+                        <div x-show="submission?.metadata?.will_submit_dna_for">
+                            <dt class="text-sm font-medium text-gray-500">DNA Submission Types</dt>
+                            <dd class="mt-1 text-sm text-gray-900 bg-gray-50 p-3 rounded">
+                                <div x-text="submission?.metadata?.will_submit_dna_for" class="whitespace-pre-wrap"></div>
+                            </dd>
+                        </div>
+                        <div x-show="submission?.metadata?.type_of_sample">
+                            <dt class="text-sm font-medium text-gray-500">Sample Types</dt>
+                            <dd class="mt-1 text-sm text-gray-900 bg-gray-50 p-3 rounded">
+                                <div x-text="submission?.metadata?.type_of_sample" class="whitespace-pre-wrap"></div>
+                            </dd>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Flow Cell and Sequencing Parameters -->
+                <div class="bg-white shadow rounded-lg p-6 mb-6" x-show="submission?.metadata?.flow_cell_type || submission?.metadata?.genome_size || submission?.metadata?.coverage_needed || submission?.metadata?.flow_cells_count">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                        <span class="text-cyan-500 mr-2">🔬</span> Flow Cell and Sequencing Parameters
+                    </h3>
+                    <dl class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div x-show="submission?.metadata?.flow_cell_type">
+                            <dt class="text-sm font-medium text-gray-500">Flow Cell Selection</dt>
+                            <dd class="mt-1 text-sm text-gray-900" x-text="submission?.metadata?.flow_cell_type || '-'"></dd>
+                        </div>
+                        <div x-show="submission?.metadata?.genome_size">
+                            <dt class="text-sm font-medium text-gray-500">Approx. Genome Size</dt>
+                            <dd class="mt-1 text-sm text-gray-900" x-text="submission?.metadata?.genome_size || '-'"></dd>
+                        </div>
+                        <div x-show="submission?.metadata?.coverage_needed">
+                            <dt class="text-sm font-medium text-gray-500">Coverage Needed</dt>
+                            <dd class="mt-1 text-sm text-gray-900" x-text="submission?.metadata?.coverage_needed || '-'"></dd>
+                        </div>
+                        <div x-show="submission?.metadata?.flow_cells_count">
+                            <dt class="text-sm font-medium text-gray-500">Estimated Number of Flow Cells</dt>
+                            <dd class="mt-1 text-sm text-gray-900" x-text="submission?.metadata?.flow_cells_count || '-'"></dd>
+                        </div>
+                    </dl>
+                </div>
+
+                <!-- Bioinformatics and Data Delivery -->
+                <div class="bg-white shadow rounded-lg p-6 mb-6" x-show="submission?.metadata?.basecalling || submission?.metadata?.file_format || submission?.metadata?.data_delivery">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                        <span class="text-indigo-500 mr-2">💾</span> Bioinformatics and Data Delivery
+                    </h3>
+                    <dl class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div x-show="submission?.metadata?.basecalling">
+                            <dt class="text-sm font-medium text-gray-500">Basecalling Method</dt>
+                            <dd class="mt-1 text-sm text-gray-900" x-text="submission?.metadata?.basecalling || '-'"></dd>
+                        </div>
+                        <div x-show="submission?.metadata?.file_format">
+                            <dt class="text-sm font-medium text-gray-500">File Format</dt>
+                            <dd class="mt-1 text-sm text-gray-900" x-text="submission?.metadata?.file_format || '-'"></dd>
+                        </div>
+                        <div x-show="submission?.metadata?.data_delivery">
+                            <dt class="text-sm font-medium text-gray-500">Data Delivery Method</dt>
+                            <dd class="mt-1 text-sm text-gray-900" x-text="submission?.metadata?.data_delivery || '-'"></dd>
+                        </div>
+                    </dl>
+                </div>
+
+                <!-- Additional Details -->
+                <div class="bg-white shadow rounded-lg p-6 mb-6" x-show="submission?.metadata?.request_summary || submission?.metadata?.notes">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                        <span class="text-orange-500 mr-2">📝</span> Additional Details
+                    </h3>
+                    <div class="space-y-4">
+                        <div x-show="submission?.metadata?.request_summary">
+                            <dt class="text-sm font-medium text-gray-500">Request Summary / Special Needs</dt>
+                            <dd class="mt-1 text-sm text-gray-900 bg-gray-50 p-3 rounded">
+                                <div x-text="submission?.metadata?.request_summary" class="whitespace-pre-wrap"></div>
+                            </dd>
+                        </div>
+                        <div x-show="submission?.metadata?.notes">
+                            <dt class="text-sm font-medium text-gray-500">Notes</dt>
+                            <dd class="mt-1 text-sm text-gray-900 bg-gray-50 p-3 rounded">
+                                <div x-text="submission?.metadata?.notes" class="whitespace-pre-wrap"></div>
+                            </dd>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Samples Table -->
                 <div class="bg-white shadow rounded-lg">
-                    <div class="px-6 py-4 border-b">
-                        <h3 class="text-lg font-medium text-gray-900">Samples (<span x-text="samples.length"></span>)</h3>
+                    <div class="px-6 py-4 border-b flex justify-between items-center">
+                        <h3 class="text-lg font-medium text-gray-900 flex items-center">
+                            <span class="text-teal-500 mr-2">📦</span>
+                            Samples (<span x-text="samples.length"></span>)
+                        </h3>
+                        <div class="text-sm text-gray-500">
+                            Total: <span x-text="samples.length"></span> samples
+                        </div>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200">
@@ -95,8 +263,10 @@
                                 <tr>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Volume (μL)</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Concentration (ng/μL)</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Qubit (ng/μL)</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nanodrop (ng/μL)</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">A260/A280</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">A260/A230</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                                 </tr>
                             </thead>
@@ -105,8 +275,10 @@
                                     <tr class="hover:bg-gray-50">
                                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900" x-text="sample.sample_name"></td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="sample.volume || '-'"></td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="sample.concentration || '-'"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="sample.qubit_concentration || sample.concentration || '-'"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="sample.nanodrop_concentration || '-'"></td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="sample.a260_a280 || '-'"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="sample.a260_a230 || '-'"></td>
                                         <td class="px-6 py-4 whitespace-nowrap">
                                             <span x-show="sample.qc_status === 'passed'" class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
                                                 Passed
@@ -114,7 +286,7 @@
                                             <span x-show="sample.qc_status === 'failed'" class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
                                                 Failed
                                             </span>
-                                            <span x-show="sample.qc_status === 'pending'" class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                            <span x-show="sample.qc_status === 'pending' || !sample.qc_status" class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
                                                 Pending
                                             </span>
                                         </td>
@@ -124,6 +296,31 @@
                         </table>
                     </div>
                 </div>
+
+                <!-- PDF Source Information -->
+                <div class="bg-white shadow rounded-lg p-6 mt-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">PDF Source</h3>
+                    <dl class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div>
+                            <dt class="font-medium text-gray-500">File Hash</dt>
+                            <dd class="mt-1 text-gray-900 font-mono text-xs" x-text="(submission?.pdf_source?.file_hash || '-').substring(0,16) + '...'"></dd>
+                        </div>
+                        <div>
+                            <dt class="font-medium text-gray-500">Page Count</dt>
+                            <dd class="mt-1 text-gray-900" x-text="submission?.pdf_source?.page_count || '-'"></dd>
+                        </div>
+                        <div>
+                            <dt class="font-medium text-gray-500">Submission ID</dt>
+                            <dd class="mt-1 text-gray-900 font-mono text-xs" x-text="submission?.id || '-'"></dd>
+                        </div>
+                    </dl>
+                </div>
+            </div>
+
+            <!-- Error State -->
+            <div x-show="!loading && !submission" x-cloak class="text-center py-8">
+                <p class="text-red-600">Failed to load submission. Please try again.</p>
+                <a href="/submissions" class="mt-4 inline-block text-indigo-600 hover:text-indigo-900">Back to Submissions</a>
             </div>
         </div>
     </main>
@@ -152,32 +349,37 @@
                 
                 async loadSubmission(id) {
                     try {
-                        const url = window.API_CONFIG.getApiUrl('/api/v1/submissions/' + id);
-                        const response = await fetch(url);
+                        const apiUrl = window.API_CONFIG?.getApiUrl() || 'http://localhost:8080';
+                        const response = await fetch(apiUrl + '/api/v1/submissions/' + id);
                         if (response.ok) {
                             this.submission = await response.json();
+                            console.log('Loaded submission:', this.submission);
                         }
                     } catch (error) {
                         console.error('Error loading submission:', error);
                     }
                 },
                 
-                async loadSamples(id) {
+                async loadSamples(submissionId) {
                     try {
-                        const url = window.API_CONFIG.getApiUrl('/api/v1/submissions/' + id + '/samples');
-                        const response = await fetch(url);
+                        const apiUrl = window.API_CONFIG?.getApiUrl() || 'http://localhost:8080';
+                        const response = await fetch(apiUrl + '/api/v1/submissions/' + submissionId + '/samples');
                         if (response.ok) {
                             const data = await response.json();
-                            this.samples = Array.isArray(data) ? data : [];
+                            // Ensure we have an array
+                            this.samples = Array.isArray(data) ? data : (data.items || []);
+                            console.log('Loaded samples:', this.samples.length);
                         }
                     } catch (error) {
                         console.error('Error loading samples:', error);
+                        this.samples = [];
                     }
                 },
                 
                 formatDate(dateString) {
                     if (!dateString) return '-';
-                    return new Date(dateString).toLocaleString();
+                    const date = new Date(dateString);
+                    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
                 }
             }
         }

@@ -138,7 +138,16 @@ async def create_submission_from_upload(
                 human_dna="Yes" if submission.metadata.contains_human_dna else "No" if submission.metadata.contains_human_dna is not None else None,
                 source_organism=submission.metadata.source_organism,
                 sample_buffer=submission.metadata.sample_buffer,
-                notes=submission.metadata.notes
+                notes=submission.metadata.notes,
+                # Flow Cell and Sequencing Parameters
+                flow_cell_type=submission.metadata.flow_cell_type,
+                genome_size=submission.metadata.genome_size,
+                coverage_needed=submission.metadata.coverage_needed,
+                flow_cells_count=submission.metadata.flow_cells_count,
+                # Bioinformatics and Data Delivery
+                basecalling=submission.metadata.basecalling,
+                file_format=submission.metadata.file_format,
+                data_delivery=submission.metadata.data_delivery
             ),
             pdf_source={
                 "file_path": str(submission.pdf_source.file_path),

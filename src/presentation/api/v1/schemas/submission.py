@@ -44,6 +44,17 @@ class SubmissionMetadataResponse(BaseModel):
     storage_location: Optional[str] = None
     notes: Optional[str] = None
     
+    # Flow Cell and Sequencing Parameters
+    flow_cell_type: Optional[str] = None
+    genome_size: Optional[str] = None
+    coverage_needed: Optional[str] = None
+    flow_cells_count: Optional[str] = None
+    
+    # Bioinformatics and Data Delivery
+    basecalling: Optional[str] = None
+    file_format: Optional[str] = None
+    data_delivery: Optional[str] = None
+    
     model_config = ConfigDict(from_attributes=True)
 
 

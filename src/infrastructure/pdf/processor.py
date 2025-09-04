@@ -78,7 +78,8 @@ class PDFProcessor:
             
             # Extract text from first few pages for additional metadata
             text_content = ""
-            for page_num in range(min(3, len(doc))):
+            # Extract text from ALL pages to capture all fields
+            for page_num in range(len(doc)):
                 page = doc.load_page(page_num)
                 text_content += page.get_text()
             
