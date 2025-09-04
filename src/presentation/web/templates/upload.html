@@ -213,8 +213,13 @@
                             // Reset form
                             this.selectedFile = null;
                             this.storageLocation = '';
-                            // Clear file input
-                            document.getElementById('file-upload').value = '';
+                            // Clear file input safely
+                            const fileInput = document.getElementById('file-upload');
+                            if (fileInput) {
+                                fileInput.value = '';
+                            } else {
+                                console.warn('File input element not found, may have been already cleared');
+                            }
                         } else {
                             const errorText = await response.text();
                             console.error('Upload failed:', errorText);

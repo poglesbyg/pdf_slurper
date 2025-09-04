@@ -54,6 +54,12 @@ router = APIRouter(
 )
 
 
+@router.get("/test-samples-working")
+async def test_samples_working():
+    """Simple test to verify routes are loading."""
+    return {"status": "TEST ROUTE WORKS!", "message": "If you see this, routes are loading correctly"}
+
+
 @router.post(
     "/",
     response_model=SubmissionResponse,
@@ -269,6 +275,36 @@ async def list_submissions(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/samples-debug-test")
+async def test_db_samples(container: Container = Depends(get_container_dependency)):
+    """Test endpoint to verify database access."""
+    from sqlmodel import Session
+    from src.infrastructure.persistence.models import SampleORM
+    
+    # Test with a known submission ID
+    test_id = "97c30e3a-9c8b-44fd-85ad-5dc1fcaa4029"
+    
+    with Session(container.database.engine) as session:
+        # Count all samples
+        total_count = session.exec(
+            select(func.count()).select_from(SampleORM)
+        ).one()
+        
+        # Count for specific submission
+        specific_count = session.exec(
+            select(func.count()).select_from(SampleORM).where(
+                SampleORM.submission_id == test_id
+            )
+        ).one()
+        
+        return {
+            "test": "SUCCESS",
+            "total_samples_in_db": total_count,
+            "test_submission_id": test_id,
+            "samples_for_test_id": specific_count,
+            "database_url": str(container.database.database_url)
+        }
+
 @router.get("/{submission_id}/samples")
 async def get_submission_samples(
     submission_id: str,
@@ -277,46 +313,77 @@ async def get_submission_samples(
     container: Container = Depends(get_container_dependency)
 ):
     """Get samples for a submission."""
-    # Import models
+    # Import at function level to avoid circular imports
     from sqlmodel import Session
     from src.infrastructure.persistence.models import SampleORM
     
-    # Use the database from container
-    with Session(container.database.engine) as session:
-        # Get total count first
-        count_stmt = select(func.count(SampleORM.id)).where(
-            SampleORM.submission_id == submission_id
-        )
-        total = session.exec(count_stmt).one()
-        
-        # Get paginated samples
-        stmt = (
-            select(SampleORM)
-            .where(SampleORM.submission_id == submission_id)
-            .offset(offset)
-            .limit(limit)
-        )
-        
-        samples = session.exec(stmt).all()
-        
-        # Convert to response format
-        sample_list = []
-        for sample in samples:
-            sample_list.append({
-                "id": sample.id,
-                "name": sample.name,
-                "volume_ul": sample.volume_ul,
-                "qubit_ng_per_ul": sample.qubit_ng_per_ul,
-                "nanodrop_ng_per_ul": sample.nanodrop_ng_per_ul,
-                "a260_a280": sample.a260_a280,
-                "a260_a230": sample.a260_a230,
-                "status": sample.status or "pending",
-                "row_index": sample.row_index,
-                "table_index": sample.table_index,
-                "page_index": sample.page_index
-            })
-        
-        return {"items": sample_list, "total": total}
+    # Add debug info to response
+    debug_info = {
+        "submission_id_received": submission_id,
+        "database_url": str(container.database.database_url),
+        "limit": limit,
+        "offset": offset
+    }
+    
+    try:
+        with Session(container.database.engine) as session:
+            # First, count ALL samples in database to verify connection
+            all_samples_count = session.exec(
+                select(func.count()).select_from(SampleORM)
+            ).one()
+            
+            debug_info["total_samples_in_db"] = all_samples_count
+            
+            # Get count for this submission
+            total = session.exec(
+                select(func.count()).select_from(SampleORM).where(
+                    SampleORM.submission_id == submission_id
+                )
+            ).one()
+            
+            debug_info["samples_for_submission"] = total
+            
+            # Get samples
+            samples = session.exec(
+                select(SampleORM)
+                .where(SampleORM.submission_id == submission_id)
+                .offset(offset)
+                .limit(limit)
+            ).all()
+            
+            debug_info["samples_retrieved"] = len(samples)
+            
+            # Convert to response
+            items = []
+            for sample in samples:
+                items.append({
+                    "id": sample.id,
+                    "name": sample.name,
+                    "volume_ul": sample.volume_ul,
+                    "qubit_ng_per_ul": sample.qubit_ng_per_ul,
+                    "nanodrop_ng_per_ul": sample.nanodrop_ng_per_ul,
+                    "a260_a280": sample.a260_a280,
+                    "a260_a230": sample.a260_a230,
+                    "status": sample.status or "pending",
+                    "row_index": sample.row_index,
+                    "table_index": sample.table_index,
+                    "page_index": sample.page_index
+                })
+            
+            return {
+                "items": items, 
+                "total": total,
+                "debug": debug_info
+            }
+    except Exception as e:
+        import traceback
+        return {
+            "items": [],
+            "total": 0,
+            "error": str(e),
+            "trace": traceback.format_exc(),
+            "debug": debug_info
+        }
 
 
 @router.get(
