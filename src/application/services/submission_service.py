@@ -85,6 +85,49 @@ class SubmissionService:
         # Create metadata from extracted PDF data
         pdf_metadata = pdf_data.get("metadata", {})
         
+        # Parse date strings if present
+        from datetime import datetime
+        as_of_str = pdf_metadata.get("as_of")
+        expires_str = pdf_metadata.get("expires_on")
+        
+        as_of = None
+        expires_on = None
+        if as_of_str:
+            try:
+                # Try to parse common date formats
+                for fmt in ["%B %d, %Y", "%Y-%m-%d", "%m/%d/%Y"]:
+                    try:
+                        as_of = datetime.strptime(as_of_str, fmt)
+                        break
+                    except:
+                        pass
+            except:
+                pass
+        
+        if expires_str:
+            try:
+                for fmt in ["%B %d, %Y", "%Y-%m-%d", "%m/%d/%Y"]:
+                    try:
+                        expires_on = datetime.strptime(expires_str, fmt)
+                        break
+                    except:
+                        pass
+            except:
+                pass
+        
+        # Handle PIs and financial contacts as lists
+        pis = pdf_metadata.get("pis", "")
+        if isinstance(pis, str) and pis:
+            pis = [p.strip() for p in pis.split(",") if p.strip()]
+        else:
+            pis = []
+            
+        financial_contacts = pdf_metadata.get("financial_contacts", "")
+        if isinstance(financial_contacts, str) and financial_contacts:
+            financial_contacts = [c.strip() for c in financial_contacts.split(",") if c.strip()]
+        else:
+            financial_contacts = []
+        
         # Create comprehensive metadata from all extracted fields
         metadata = SubmissionMetadata(
             identifier=pdf_metadata.get("identifier", ""),
@@ -95,22 +138,23 @@ class SubmissionService:
             organism=Organism(
                 full_name=pdf_metadata.get("source_organism") or pdf_metadata.get("organism")
             ) if (pdf_metadata.get("source_organism") or pdf_metadata.get("organism")) else None,
-            contains_human_dna=pdf_metadata.get("contains_human_dna"),
+            contains_human_dna=pdf_metadata.get("contains_human_dna") or (pdf_metadata.get("human_dna") == "Yes"),
             storage_location=storage_location,
-            # Additional comprehensive fields
-            as_of=pdf_metadata.get("as_of"),
-            expires_on=pdf_metadata.get("expires_on"),
+            # Date fields
+            as_of=as_of,
+            expires_on=expires_on,
+            # Contact fields
             phone=pdf_metadata.get("phone"),
             billing_address=pdf_metadata.get("billing_address"),
-            pis=pdf_metadata.get("pis"),
-            financial_contacts=pdf_metadata.get("financial_contacts"),
+            pis=pis,
+            financial_contacts=financial_contacts,
+            # Additional fields
             request_summary=pdf_metadata.get("request_summary"),
             forms_text=pdf_metadata.get("forms_text"),
             will_submit_dna_for=pdf_metadata.get("will_submit_dna_for"),
             type_of_sample=pdf_metadata.get("type_of_sample"),
-            human_dna=pdf_metadata.get("human_dna"),
-            source_organism=pdf_metadata.get("source_organism"),
             sample_buffer=pdf_metadata.get("sample_buffer"),
+            source_organism=pdf_metadata.get("source_organism"),
             notes=pdf_metadata.get("notes")
         )
         

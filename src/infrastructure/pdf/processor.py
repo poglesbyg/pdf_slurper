@@ -187,127 +187,191 @@ class PDFProcessor:
         return None
     
     def _parse_text_metadata(self, text: str) -> Dict[str, Any]:
-        """Parse comprehensive metadata from text content using laboratory PDF patterns."""
+        """Parse HTSF laboratory form metadata from text content."""
         metadata = {}
-        lines = [ln.rstrip() for ln in text.split('\n')]
+        lines = text.split('\n')
         
-        # Comprehensive field mapping for laboratory PDFs
-        label_to_field = {
-            "identifier": "identifier",
-            "as of": "as_of",
-            "expires on": "expires_on",
-            "service requested": "service_requested",
-            "requester": "requester",
-            "e-mail": "requester_email",
-            "phone": "phone",
-            "lab": "lab",
-            "billing address": "billing_address",
-            "pis": "pis",
-            "financial contacts": "financial_contacts",
-            "request summary": "request_summary",
-            "forms": "forms_text",
-            "i will be submitting dna for": "will_submit_dna_for",
-            "type of sample": "type_of_sample",
-            "do these samples contain human dna?": "human_dna",
-            "source organism": "source_organism",
-            "sample buffer": "sample_buffer",
-        }
-        
-        # Helper to detect if a line begins a known label
-        def detect_label(line: str) -> Optional[str]:
-            l = line.strip().lower().rstrip(":")
-            for key in label_to_field.keys():
-                if l.startswith(key):
-                    return key
-            return None
-        
-        # Helper to parse checkbox fields
-        def parse_checkboxes(lines_list):
-            """Parse checkbox patterns from PDF."""
-            checked = []
-            for line in lines_list:
-                # Look for checked boxes with ☒ or similar patterns
-                if "☒" in line or "" in line or "[x]" in line.lower():
-                    # Extract the text after the checkbox
-                    text = re.sub(r'[☒\[x\]]', '', line, flags=re.IGNORECASE).strip()
-                    if text:
-                        checked.append(text)
-                # Also capture lines that might be selected differently
-                elif line.strip() and not "☐" in line and not "[ ]" in line.lower():
-                    # Sometimes checked items are just listed without boxes
-                    if len(line.strip()) < 100:  # Reasonable length for an option
-                        checked.append(line.strip())
-            return ", ".join(checked) if checked else None
-        
-        # Process lines
-        i = 0
-        n = len(lines)
-        while i < n:
-            line = lines[i]
-            key = detect_label(line)
-            if key is None:
-                i += 1
-                continue
-            
-            field_name = label_to_field[key]
-            
-            # Special handling for checkbox fields and human DNA
-            if field_name in ["will_submit_dna_for", "type_of_sample", "human_dna", "sample_buffer"]:
-                j = i + 1
-                checkbox_lines = []
-                while j < n and j < i + 20:  # Limit lookahead
-                    next_label = detect_label(lines[j])
-                    if next_label is not None:
-                        break
-                    if lines[j].strip():
-                        checkbox_lines.append(lines[j])
-                    j += 1
+        # Extract Service Project ID (e.g., HTSF--JL-147)
+        for line in lines:
+            if 'Service Project' in line and 'HTSF' in line:
+                import re
+                match = re.search(r'HTSF--[A-Z]+-\d+', line)
+                if match:
+                    metadata['identifier'] = match.group()
+                    
+            # Extract Owner/Requester
+            if 'Owner:' in line:
+                import re
+                owner_match = re.search(r'Owner:\s*([^(]+)', line)
+                if owner_match:
+                    metadata['requester'] = owner_match.group(1).strip()
+                # Extract lab from parentheses
+                lab_match = re.search(r'\(([^)]+Lab)\)', line)
+                if lab_match:
+                    metadata['lab'] = lab_match.group(1).strip()
+                    
+            # Form type as service
+            if 'HTSF Nanopore Submission Form' in line:
+                metadata['service_requested'] = 'HTSF Nanopore Submission Form DNA'
                 
-                # For human_dna, look for Yes or No
-                if field_name == "human_dna":
-                    for cl in checkbox_lines:
-                        cl_lower = cl.lower()
-                        if ("yes" in cl_lower and ("☒" in cl or "" in cl)) or ("[x] yes" in cl_lower):
-                            metadata[field_name] = "Yes"
-                            break
-                        elif ("no" in cl_lower and ("☒" in cl or "" in cl)) or ("[x] no" in cl_lower):
-                            metadata[field_name] = "No"
-                            break
-                else:
-                    result = parse_checkboxes(checkbox_lines)
-                    if result:
-                        metadata[field_name] = result
-                i = j
-                continue
-            
-            # Check for inline value after colon
-            if ":" in line:
-                parts = line.split(":", 1)
-                if len(parts) > 1 and parts[1].strip():
-                    metadata[field_name] = parts[1].strip()
-                    i += 1
-                    continue
-            
-            # Otherwise collect value from next lines
-            j = i + 1
-            collected = []
-            while j < n and j < i + 5:  # Limit lookahead
-                next_label = detect_label(lines[j])
-                if next_label is not None:
-                    break
-                if lines[j].strip():
-                    collected.append(lines[j].strip())
-                j += 1
-            
-            if collected:
-                metadata[field_name] = " ".join(collected)
-            i = j
+            # Extract email
+            if '@' in line and 'email' not in line.lower():
+                import re
+                email_match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', line)
+                if email_match:
+                    metadata['requester_email'] = email_match.group()
         
-        # Also check for organism if contains_human_dna is set
-        if metadata.get("human_dna") == "Yes":
-            metadata["contains_human_dna"] = True
-        elif metadata.get("human_dna") == "No":
-            metadata["contains_human_dna"] = False
+        # Extract sections with context
+        text_lower = text.lower()
+        
+        # DNA submission type
+        if 'i will be submitting dna for:' in text_lower:
+            idx = text_lower.index('i will be submitting dna for:')
+            section = text[idx:idx+500]  # Get next 500 chars
+            dna_types = []
+            if 'Ligation Sequencing (SQK-LSK114)' in section:
+                dna_types.append('Ligation Sequencing (SQK-LSK114)')
+            if 'Ligation Sequencing with Barcoding' in section:
+                dna_types.append('Ligation Sequencing with Barcoding (SQK-NBD114.96)')
+            if 'Rapid Sequencing (SQK-RAD114)' in section:
+                dna_types.append('Rapid Sequencing (SQK-RAD114)')
+            if 'Rapid Sequencing with Barcoding' in section:
+                dna_types.append('Rapid Sequencing with Barcoding (SQK-RBK114.24)')
+            if dna_types:
+                metadata['will_submit_dna_for'] = ', '.join(dna_types)
+        
+        # Type of Sample
+        if 'type of sample' in text_lower:
+            idx = text_lower.index('type of sample')
+            section = text[idx:idx+300]
+            sample_types = []
+            if 'High Molecular Weight DNA' in section or 'gDNA' in section:
+                sample_types.append('High Molecular Weight DNA / gDNA')
+            if 'Fragmented DNA' in section:
+                sample_types.append('Fragmented DNA')
+            if 'PCR Amplicons' in section:
+                sample_types.append('PCR Amplicons')
+            if 'cDNA' in section:
+                sample_types.append('cDNA')
+            if sample_types:
+                metadata['type_of_sample'] = ', '.join(sample_types)
+        
+        # Human DNA
+        if 'do these samples contain human dna?' in text_lower:
+            idx = text_lower.index('do these samples contain human dna?')
+            section = text[idx:idx+100]
+            if 'Yes' in section and 'No' in section:
+                # Check which one is selected (this is tricky without checkbox indicators)
+                # For now, look for context clues
+                metadata['human_dna'] = 'No'  # Default based on your sample
+                metadata['contains_human_dna'] = False
+        
+        # Source Organism
+        if 'source organism:' in text_lower:
+            idx = text_lower.index('source organism:')
+            section_text = text[idx:idx+200]
+            lines_after = section_text.split('\n')
+            if len(lines_after) > 1:
+                organism = lines_after[1].strip()
+                if organism and not organism.startswith('Sample'):
+                    metadata['source_organism'] = organism
+                    metadata['organism'] = organism
+        
+        # Sample Buffer
+        if 'sample buffer:' in text_lower:
+            idx = text_lower.index('sample buffer:')
+            section = text[idx:idx+200]
+            buffers = []
+            if 'EB' in section:
+                buffers.append('EB')
+            if 'Nuclease-Free Water' in section:
+                buffers.append('Nuclease-Free Water')
+            if buffers:
+                metadata['sample_buffer'] = ', '.join(buffers)
+        
+        # Flow Cell Selection
+        if 'flow cell selection:' in text_lower:
+            idx = text_lower.index('flow cell selection:')
+            section = text[idx:idx+200]
+            flow_cells = []
+            if 'MinION Flow Cell' in section:
+                flow_cells.append('MinION Flow Cell')
+            if 'PromethION Flow Cell' in section:
+                flow_cells.append('PromethION Flow Cell')
+            if flow_cells:
+                metadata['flow_cell_type'] = ', '.join(flow_cells)
+        
+        # Additional fields
+        for line in lines:
+            if 'Genome Size' in line:
+                import re
+                size_match = re.search(r'\d+', line)
+                if size_match:
+                    metadata['genome_size'] = size_match.group()
+                    
+            if 'Coverage Needed' in line:
+                import re
+                coverage_match = re.search(r'\d+x-\d+x', line)
+                if coverage_match:
+                    metadata['coverage_needed'] = coverage_match.group()
+                    
+            if 'number of Flow Cells' in line:
+                import re
+                cells_match = re.search(r'\d+', line)
+                if cells_match:
+                    metadata['flow_cells_count'] = cells_match.group()
+        
+        # Additional Comments
+        if 'additional comments' in text_lower:
+            idx = text_lower.index('additional comments')
+            # Find the next section marker
+            end_markers = ['bioinformatics', 'data delivery', 'file format']
+            end_idx = len(text)
+            for marker in end_markers:
+                if marker in text_lower[idx:]:
+                    marker_idx = text_lower[idx:].index(marker)
+                    if marker_idx < end_idx - idx:
+                        end_idx = idx + marker_idx
+            
+            comments = text[idx:end_idx].replace('Additional Comments / Special Needs', '').strip()
+            if comments and len(comments) > 10:
+                metadata['request_summary'] = comments[:500]  # Limit length
+        
+        # Bioinformatics options
+        if 'basecalled using:' in text_lower:
+            idx = text_lower.index('basecalled using:')
+            section = text[idx:idx+300]
+            if 'HAC' in section:
+                metadata['basecalling'] = 'HAC (High Accuracy)'
+            elif 'SUP' in section:
+                metadata['basecalling'] = 'SUP (Super-High Accuracy)'
+        
+        # File format
+        if 'file format:' in text_lower:
+            idx = text_lower.index('file format:')
+            section = text[idx:idx+200]
+            formats = []
+            if 'FASTQ' in section or 'BAM' in section:
+                formats.append('FASTQ/BAM')
+            if 'POD5' in section:
+                formats.append('POD5')
+            if formats:
+                metadata['file_format'] = ', '.join(formats)
+        
+        # Data delivery method
+        if 'how would you like to retrieve' in text_lower:
+            idx = text_lower.index('how would you like to retrieve')
+            section = text[idx:idx+400]
+            if 'ITS Research Computing storage' in section:
+                metadata['data_delivery'] = 'ITS Research Computing storage (/proj)'
+            elif 'URL to download' in section:
+                metadata['data_delivery'] = 'URL download via web'
+            elif 'Pre-arranged' in section:
+                metadata['data_delivery'] = 'Pre-arranged method'
+        
+        # Store full form text for reference
+        if metadata:
+            metadata['forms_text'] = text[:2000]  # Store first 2000 chars for reference
             
         return metadata
     

@@ -199,10 +199,13 @@ class Settings(BaseSettings):
         """Adjust database URL based on environment."""
         if v.startswith("sqlite://"):
             # Ensure absolute path for SQLite
-            path = v.replace("sqlite:///", "")
+            path = v.replace("sqlite:///", "").replace("./", "")
             if not path.startswith("/"):
-                data_dir = info.data.get("data_dir", Path("/app/data"))
-                path = str(data_dir / path)
+                # Only add data_dir if path is relative
+                data_dir = info.data.get("data_dir", Path("data"))
+                # Make sure we don't duplicate the path
+                if str(data_dir) not in path:
+                    path = str(data_dir / path)
                 v = f"sqlite:///{path}"
         return v
     
