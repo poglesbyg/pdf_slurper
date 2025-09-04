@@ -191,35 +191,40 @@ class PDFProcessor:
         metadata = {}
         lines = text.split('\n')
         
-        # Extract Service Project ID (e.g., HTSF--JL-147)
+        # Extract HTSF identifier
         for line in lines:
-            if 'Service Project' in line and 'HTSF' in line:
+            if 'Identifier:' in line and 'HTSF' in line:
                 import re
                 match = re.search(r'HTSF--[A-Z]+-\d+', line)
                 if match:
                     metadata['identifier'] = match.group()
                     
-            # Extract Owner/Requester
-            if 'Owner:' in line:
-                import re
-                owner_match = re.search(r'Owner:\s*([^(]+)', line)
-                if owner_match:
-                    metadata['requester'] = owner_match.group(1).strip()
-                # Extract lab from parentheses
-                lab_match = re.search(r'\(([^)]+Lab)\)', line)
-                if lab_match:
-                    metadata['lab'] = lab_match.group(1).strip()
+            # Extract Requester (from "Requester:" line)
+            if 'Requester:' in line:
+                # Look at the next line for the value
+                idx = lines.index(line)
+                if idx + 1 < len(lines):
+                    metadata['requester'] = lines[idx + 1].strip()
                     
-            # Form type as service
-            if 'HTSF Nanopore Submission Form' in line:
-                metadata['service_requested'] = 'HTSF Nanopore Submission Form DNA'
+            # Extract Lab (from "Lab:" line)  
+            if line.startswith('Lab:'):
+                idx = lines.index(line)
+                if idx + 1 < len(lines):
+                    metadata['lab'] = lines[idx + 1].strip()
+                    
+            # Extract Service Requested
+            if 'Service Requested:' in line:
+                idx = lines.index(line)
+                if idx + 1 < len(lines):
+                    metadata['service_requested'] = lines[idx + 1].strip()
                 
-            # Extract email
-            if '@' in line and 'email' not in line.lower():
-                import re
-                email_match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', line)
-                if email_match:
-                    metadata['requester_email'] = email_match.group()
+            # Extract email (from "E-mail:" line)
+            if 'E-mail:' in line:
+                idx = lines.index(line)
+                if idx + 1 < len(lines):
+                    email = lines[idx + 1].strip()
+                    if '@' in email:
+                        metadata['requester_email'] = email
         
         # Extract sections with context
         text_lower = text.lower()

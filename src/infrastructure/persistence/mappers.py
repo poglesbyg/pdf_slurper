@@ -69,7 +69,7 @@ class DomainMapper:
             pis=pis_json,
             financial_contacts=contacts_json,
             request_summary=metadata.request_summary,
-            source_organism=metadata.organism.full_name if metadata.organism else None,
+            source_organism=metadata.organism.species if metadata.organism else None,
             human_dna="Yes" if metadata.contains_human_dna else "No" if metadata.contains_human_dna is not None else None,
             sample_buffer_json=metadata.sample_buffer,
             type_of_sample_json=metadata.submission_type

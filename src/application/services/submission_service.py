@@ -9,7 +9,7 @@ from ...domain.models.submission import Submission, SubmissionMetadata, PDFSourc
 from ...domain.models.sample import Sample, Measurements
 from ...domain.models.value_objects import (
     SubmissionId, SampleId, WorkflowStatus, Organism,
-    Concentration, Volume, QualityRatio
+    Concentration, Volume, QualityRatio, EmailAddress
 )
 from ...domain.repositories.submission_repository import SubmissionRepository
 
@@ -133,10 +133,10 @@ class SubmissionService:
             identifier=pdf_metadata.get("identifier", ""),
             service_requested=pdf_metadata.get("service_requested", ""),
             requester=pdf_metadata.get("requester", ""),
-            requester_email=pdf_metadata.get("requester_email"),
+            requester_email=EmailAddress(value=pdf_metadata.get("requester_email")) if pdf_metadata.get("requester_email") else None,
             lab=pdf_metadata.get("lab", ""),
             organism=Organism(
-                full_name=pdf_metadata.get("source_organism") or pdf_metadata.get("organism")
+                species=pdf_metadata.get("source_organism") or pdf_metadata.get("organism")
             ) if (pdf_metadata.get("source_organism") or pdf_metadata.get("organism")) else None,
             contains_human_dna=pdf_metadata.get("contains_human_dna") or (pdf_metadata.get("human_dna") == "Yes"),
             storage_location=storage_location,
