@@ -31,6 +31,12 @@ class SubmissionMetadata:
     sample_buffer: Optional[str] = None
     submission_type: Optional[str] = None
     storage_location: Optional[str] = None  # Location where samples are stored
+    # Additional comprehensive fields from PDF extraction
+    forms_text: Optional[str] = None
+    will_submit_dna_for: Optional[str] = None
+    type_of_sample: Optional[str] = None
+    source_organism: Optional[str] = None
+    notes: Optional[str] = None
     
     @property
     def is_expired(self) -> bool:

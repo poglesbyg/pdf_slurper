@@ -84,6 +84,8 @@ class SubmissionService:
         
         # Create metadata from extracted PDF data
         pdf_metadata = pdf_data.get("metadata", {})
+        
+        # Create comprehensive metadata from all extracted fields
         metadata = SubmissionMetadata(
             identifier=pdf_metadata.get("identifier", ""),
             service_requested=pdf_metadata.get("service_requested", ""),
@@ -91,10 +93,25 @@ class SubmissionService:
             requester_email=pdf_metadata.get("requester_email"),
             lab=pdf_metadata.get("lab", ""),
             organism=Organism(
-                full_name=pdf_metadata.get("organism")
-            ) if pdf_metadata.get("organism") else None,
+                full_name=pdf_metadata.get("source_organism") or pdf_metadata.get("organism")
+            ) if (pdf_metadata.get("source_organism") or pdf_metadata.get("organism")) else None,
             contains_human_dna=pdf_metadata.get("contains_human_dna"),
-            storage_location=storage_location
+            storage_location=storage_location,
+            # Additional comprehensive fields
+            as_of=pdf_metadata.get("as_of"),
+            expires_on=pdf_metadata.get("expires_on"),
+            phone=pdf_metadata.get("phone"),
+            billing_address=pdf_metadata.get("billing_address"),
+            pis=pdf_metadata.get("pis"),
+            financial_contacts=pdf_metadata.get("financial_contacts"),
+            request_summary=pdf_metadata.get("request_summary"),
+            forms_text=pdf_metadata.get("forms_text"),
+            will_submit_dna_for=pdf_metadata.get("will_submit_dna_for"),
+            type_of_sample=pdf_metadata.get("type_of_sample"),
+            human_dna=pdf_metadata.get("human_dna"),
+            source_organism=pdf_metadata.get("source_organism"),
+            sample_buffer=pdf_metadata.get("sample_buffer"),
+            notes=pdf_metadata.get("notes")
         )
         
         # Create PDF source

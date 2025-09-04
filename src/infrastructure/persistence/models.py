@@ -52,6 +52,11 @@ class SubmissionORM(SQLModel, table=True):
     human_dna: Optional[str] = None
     source_organism: Optional[str] = None
     sample_buffer_json: Optional[str] = None
+    # Additional comprehensive PDF extraction fields
+    will_submit_dna_for: Optional[str] = Field(default=None)
+    type_of_sample: Optional[str] = Field(default=None)
+    sample_buffer: Optional[str] = Field(default=None)
+    notes: Optional[str] = Field(default=None, max_length=None)
     
     # Relationships
     samples: List["SampleORM"] = Relationship(

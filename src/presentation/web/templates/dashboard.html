@@ -3,179 +3,142 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF Slurper Dashboard</title>
-    <script src="/config.js"></script>
+    <title>Dashboard - PDF Slurper</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="/config.js"></script>
     <style>
-        .loading { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; opacity: 0.5; }
-        @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+        [x-cloak] { display: none !important; }
     </style>
 </head>
 <body class="bg-gray-50">
-    <div x-data="app()" x-init="init()" class="min-h-screen">
-        <!-- Navigation -->
-        <nav class="bg-white shadow-sm border-b">
-            <div class="container mx-auto px-4">
-                <div class="flex justify-between items-center h-16">
-                    <div class="flex items-center space-x-8">
-                        <h1 class="text-xl font-semibold text-gray-900">PDF Slurper v2</h1>
-                        <div class="flex space-x-4">
-                            <a href="/dashboard.html" class="text-blue-600 font-medium">Dashboard</a>
-                            <a href="/upload.html" class="text-gray-600 hover:text-gray-900">Upload</a>
-                            <a href="/submissions.html" class="text-gray-600 hover:text-gray-900">Submissions</a>
-                        </div>
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex">
+                    <div class="flex-shrink-0 flex items-center">
+                        <h1 class="text-xl font-bold text-gray-900">PDF Slurper</h1>
                     </div>
-                    <div class="text-sm text-gray-500">
-                        API Status: <span x-text="apiStatus" :class="apiStatus === 'Connected' ? 'text-green-600' : 'text-red-600'" class="font-medium"></span>
+                    <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
+                        <a href="/" class="border-indigo-500 text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            Dashboard
+                        </a>
+                        <a href="/submissions" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            Submissions
+                        </a>
+                        <a href="/upload" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            Upload
+                        </a>
                     </div>
                 </div>
             </div>
-        </nav>
+        </div>
+    </nav>
 
-        <!-- Main Content -->
-        <main class="container mx-auto px-4 py-8">
-            <!-- Stats Grid -->
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                <div class="bg-white rounded-lg shadow p-6">
-                    <div class="text-sm font-medium text-gray-500 mb-1">Total Submissions</div>
-                    <div class="text-2xl font-bold text-gray-900" x-text="stats.total_submissions || 0"></div>
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div x-data="dashboardApp()" x-init="init()">
+            <!-- Header -->
+            <div class="px-4 sm:px-0 mb-6">
+                <h2 class="text-2xl font-bold text-gray-900">Dashboard</h2>
+                <p class="mt-1 text-sm text-gray-600">Overview of all submissions and samples</p>
+            </div>
+
+            <!-- Statistics Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <p class="text-sm font-medium text-gray-600">Total Submissions</p>
+                    <p class="text-2xl font-bold text-gray-900" x-text="statistics.total_submissions">0</p>
                 </div>
-                <div class="bg-white rounded-lg shadow p-6">
-                    <div class="text-sm font-medium text-gray-500 mb-1">Total Samples</div>
-                    <div class="text-2xl font-bold text-gray-900" x-text="stats.total_samples || 0"></div>
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <p class="text-sm font-medium text-gray-600">Total Samples</p>
+                    <p class="text-2xl font-bold text-gray-900" x-text="statistics.total_samples">0</p>
                 </div>
-                <div class="bg-white rounded-lg shadow p-6">
-                    <div class="text-sm font-medium text-gray-500 mb-1">Avg Quality Score</div>
-                    <div class="text-2xl font-bold text-gray-900" x-text="stats.average_quality_score ? stats.average_quality_score.toFixed(2) : 'N/A'"></div>
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <p class="text-sm font-medium text-gray-600">Passed QC</p>
+                    <p class="text-2xl font-bold text-green-600" x-text="statistics.passed_samples">0</p>
                 </div>
-                <div class="bg-white rounded-lg shadow p-6">
-                    <div class="text-sm font-medium text-gray-500 mb-1">Processing Today</div>
-                    <div class="text-2xl font-bold text-gray-900" x-text="stats.processing_today || 0"></div>
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <p class="text-sm font-medium text-gray-600">Failed QC</p>
+                    <p class="text-2xl font-bold text-red-600" x-text="statistics.failed_samples">0</p>
                 </div>
             </div>
 
             <!-- Recent Submissions -->
-            <div class="bg-white rounded-lg shadow">
+            <div class="bg-white shadow rounded-lg">
                 <div class="px-6 py-4 border-b">
-                    <h2 class="text-lg font-semibold text-gray-900">Recent Submissions</h2>
+                    <h3 class="text-lg font-medium text-gray-900">Recent Submissions</h3>
                 </div>
-                <div class="p-6">
-                    <div x-show="loading" class="text-center py-8">
-                        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-                        <div class="mt-2 text-gray-600">Loading submissions...</div>
-                    </div>
-                    
-                    <div x-show="!loading && recentSubmissions.length === 0" class="text-center py-8 text-gray-500">
-                        No submissions found. <a href="/upload.html" class="text-blue-600 hover:underline">Upload your first PDF</a>
-                    </div>
-                    
-                    <div x-show="!loading && recentSubmissions.length > 0" class="overflow-x-auto">
-                        <table class="min-w-full">
-                            <thead>
-                                <tr class="border-b">
-                                    <th class="text-left py-2 px-3 font-medium text-gray-700">ID</th>
-                                    <th class="text-left py-2 px-3 font-medium text-gray-700">Date</th>
-                                    <th class="text-left py-2 px-3 font-medium text-gray-700">Samples</th>
-                                    <th class="text-left py-2 px-3 font-medium text-gray-700">Status</th>
-                                    <th class="text-left py-2 px-3 font-medium text-gray-700">Actions</th>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Requester</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lab</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Storage</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Samples</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <template x-for="submission in submissions" :key="submission.id">
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900" x-text="submission.id.substring(0, 8) + '...'"></td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="submission.metadata?.requester || '-'"></td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="submission.metadata?.lab || '-'"></td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="submission.metadata?.storage_location || '-'"></td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="submission.sample_count"></td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        <a :href="'/submission.html?id=' + submission.id" class="text-indigo-600 hover:text-indigo-900">View</a>
+                                    </td>
                                 </tr>
-                            </thead>
-                            <tbody>
-                                <template x-for="submission in recentSubmissions" :key="submission.id">
-                                    <tr class="border-b hover:bg-gray-50">
-                                        <td class="py-2 px-3">
-                                            <span class="font-mono text-sm" x-text="submission.id.substring(0, 8)"></span>
-                                        </td>
-                                        <td class="py-2 px-3 text-sm" x-text="new Date(submission.created_at).toLocaleDateString()"></td>
-                                        <td class="py-2 px-3 text-sm" x-text="submission.sample_count"></td>
-                                        <td class="py-2 px-3">
-                                            <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800" x-text="submission.status || 'Completed'"></span>
-                                        </td>
-                                        <td class="py-2 px-3">
-                                            <button @click="viewSubmission(submission.id)" class="text-blue-600 hover:underline text-sm">View</button>
-                                        </td>
-                                    </tr>
-                                </template>
-                            </tbody>
-                        </table>
-                    </div>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="px-6 py-4 border-t">
+                    <a href="/submissions" class="text-indigo-600 hover:text-indigo-900 text-sm font-medium">View all submissions →</a>
                 </div>
             </div>
-
-            <!-- Error Display -->
-            <div x-show="error" class="mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-                <strong>Error:</strong> <span x-text="error"></span>
-            </div>
-        </main>
-    </div>
+        </div>
+    </main>
 
     <script>
-        function app() {
+        function dashboardApp() {
             return {
-                apiStatus: 'Checking...',
-                stats: {},
-                recentSubmissions: [],
-                loading: true,
-                error: null,
-
+                statistics: { total_submissions: 0, total_samples: 0, passed_samples: 0, failed_samples: 0 },
+                submissions: [],
+                
                 async init() {
-                    await this.checkApiConnection();
-                    await this.loadData();
+                    await this.loadStatistics();
+                    await this.loadSubmissions();
                 },
-
-                async checkApiConnection() {
+                
+                async loadStatistics() {
                     try {
-                        // Use GET with limit=1 instead of HEAD as the API doesn't support HEAD requests
-                        const response = await fetch(window.API_CONFIG.getApiUrl('api/v1/submissions/?limit=1'), { 
-                            method: 'GET',
-                            signal: AbortSignal.timeout(5000)
-                        });
-                        this.apiStatus = response.ok ? 'Connected' : 'Error';
-                    } catch (error) {
-                        this.apiStatus = 'Disconnected';
-                    }
-                },
-
-                async loadData() {
-                    this.loading = true;
-                    this.error = null;
-                    
-                    try {
-                        // Load statistics
-                        const statsResponse = await fetch(window.API_CONFIG.getApiUrl('api/v1/submissions/statistics'));
-                        if (statsResponse.ok) {
-                            this.stats = await statsResponse.json();
-                        }
-                        
-                        // Load recent submissions
-                        const submissionsResponse = await fetch(window.API_CONFIG.getApiUrl('api/v1/submissions/?limit=10'));
-                        if (submissionsResponse.ok) {
-                            const data = await submissionsResponse.json();
-                            this.recentSubmissions = data.items || [];
-                        } else {
-                            throw new Error('Failed to load submissions');
+                        const response = await fetch(window.API_CONFIG.getApiUrl('/api/v1/submissions/statistics'));
+                        if (response.ok) {
+                            this.statistics = await response.json();
                         }
                     } catch (error) {
-                        console.error('Error loading data:', error);
-                        this.error = error.message;
-                        // Use dummy data if API fails
-                        this.stats = {
-                            total_submissions: 0,
-                            total_samples: 0,
-                            average_quality_score: null,
-                            processing_today: 0
-                        };
-                        this.recentSubmissions = [];
-                    } finally {
-                        this.loading = false;
+                        console.error('Error loading statistics:', error);
                     }
                 },
-
-                viewSubmission(id) {
-                    window.location.href = `/submission.html?id=${id}`;
+                
+                async loadSubmissions() {
+                    try {
+                        const response = await fetch(window.API_CONFIG.getApiUrl('/api/v1/submissions/?limit=10'));
+                        if (response.ok) {
+                            const data = await response.json();
+                            this.submissions = data.items || [];
+                        }
+                    } catch (error) {
+                        console.error('Error loading submissions:', error);
+                    }
                 }
-            };
+            }
         }
     </script>
 </body>

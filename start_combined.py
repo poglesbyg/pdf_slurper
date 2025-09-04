@@ -91,7 +91,26 @@ def create_combined_app() -> FastAPI:
         """Readiness check endpoint."""
         return {"status": "ready", "version": API_VERSION}
     
-    # API Routes
+    # Serve config.js
+    @app.get("/config.js", response_class=HTMLResponse)
+    async def serve_config():
+        """Serve the config.js file."""
+        config_content = """// Local Development Configuration
+window.API_CONFIG = {
+    getApiUrl: function(path) {
+        const baseUrl = 'http://localhost:8080';
+        if (!path) return baseUrl;
+        const cleanPath = path.startsWith('/') ? path : '/' + path;
+        return baseUrl + cleanPath;
+    },
+    apiBase: '/api/v1'
+};
+
+window.config = window.API_CONFIG;
+console.log('API Configuration (LOCAL):', window.API_CONFIG.getApiUrl());"""
+        return HTMLResponse(content=config_content, media_type="application/javascript")
+    
+        # API Routes
     app.include_router(
         submissions.router,
         prefix="/api/v1",
@@ -115,8 +134,26 @@ def create_combined_app() -> FastAPI:
         return templates.TemplateResponse("submissions.html", {"request": request})
     
     @app.get("/submission/{submission_id}", response_class=HTMLResponse)
-    async def submission_detail(request: Request, submission_id: str):
-        """Submission detail page."""
+    async def submission_detail_path(request: Request, submission_id: str):
+        """Submission detail page with path parameter."""
+        return templates.TemplateResponse("submission_detail.html", {
+            "request": request,
+            "submission_id": submission_id
+        })
+    
+    @app.get("/submission.html", response_class=HTMLResponse)
+    async def submission_detail_query(request: Request):
+        """Submission detail page with query parameter."""
+        submission_id = request.query_params.get("id", "")
+        return templates.TemplateResponse("submission_detail.html", {
+            "request": request,
+            "submission_id": submission_id
+        })
+    
+    @app.get("/submission_detail.html", response_class=HTMLResponse)
+    async def submission_detail_page(request: Request):
+        """Submission detail page (alternative URL)."""
+        submission_id = request.query_params.get("id", "")
         return templates.TemplateResponse("submission_detail.html", {
             "request": request,
             "submission_id": submission_id
@@ -126,6 +163,26 @@ def create_combined_app() -> FastAPI:
     async def analytics_page(request: Request):
         """Analytics page (placeholder)."""
         return templates.TemplateResponse("404.html", {"request": request}, status_code=404)
+    
+    @app.get("/dashboard.html", response_class=HTMLResponse)
+    async def dashboard_html(request: Request):
+        """Dashboard page (HTML extension)."""
+        return templates.TemplateResponse("dashboard.html", {"request": request})
+    
+    @app.get("/dashboard", response_class=HTMLResponse)
+    async def dashboard_alt(request: Request):
+        """Dashboard page (alternative URL)."""
+        return templates.TemplateResponse("dashboard.html", {"request": request})
+    
+    @app.get("/submissions.html", response_class=HTMLResponse)
+    async def submissions_html(request: Request):
+        """Submissions page (HTML extension)."""
+        return templates.TemplateResponse("submissions.html", {"request": request})
+    
+    @app.get("/upload.html", response_class=HTMLResponse)
+    async def upload_html(request: Request):
+        """Upload page (HTML extension)."""
+        return templates.TemplateResponse("upload.html", {"request": request})
     
     return app
 
