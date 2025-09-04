@@ -1,454 +1,182 @@
-{% extends "base.html" %}
-
-{% block title %}Dashboard - PDF Slurper v2{% endblock %}
-
-{% block content %}
-<div x-data="dashboard()" x-init="init()" class="space-y-6">
-    <!-- Page Header -->
-    <div class="bg-white shadow rounded-lg p-6">
-        <div class="flex items-center justify-between">
-            <div>
-                <h1 class="text-2xl font-bold text-gray-900">Dashboard</h1>
-                <p class="text-gray-600">Overview of your laboratory sample processing</p>
-            </div>
-            <div class="flex space-x-3">
-                <button @click="refreshData()" class="btn-secondary">
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                    </svg>
-                    Refresh
-                </button>
-                <a href="/upload" class="btn-primary">
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                    </svg>
-                    Upload PDF
-                </a>
-            </div>
-        </div>
-    </div>
-
-    <!-- Statistics Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div class="bg-white shadow rounded-lg p-6">
-            <div class="flex items-center">
-                <div class="flex-shrink-0">
-                    <div class="w-8 h-8 bg-blue-500 rounded-md flex items-center justify-center">
-                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                        </svg>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Slurper Dashboard</title>
+    <script src="/config.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        .loading { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; opacity: 0.5; }
+        @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div x-data="app()" x-init="init()" class="min-h-screen">
+        <!-- Navigation -->
+        <nav class="bg-white shadow-sm border-b">
+            <div class="container mx-auto px-4">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center space-x-8">
+                        <h1 class="text-xl font-semibold text-gray-900">PDF Slurper v2</h1>
+                        <div class="flex space-x-4">
+                            <a href="/dashboard.html" class="text-blue-600 font-medium">Dashboard</a>
+                            <a href="/upload.html" class="text-gray-600 hover:text-gray-900">Upload</a>
+                            <a href="/submissions.html" class="text-gray-600 hover:text-gray-900">Submissions</a>
+                        </div>
+                    </div>
+                    <div class="text-sm text-gray-500">
+                        API Status: <span x-text="apiStatus" :class="apiStatus === 'Connected' ? 'text-green-600' : 'text-red-600'" class="font-medium"></span>
                     </div>
                 </div>
-                <div class="ml-4">
-                    <p class="text-sm font-medium text-gray-500">Total Submissions</p>
-                    <p class="text-2xl font-semibold text-gray-900" x-text="stats.total_submissions || '0'"></p>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="container mx-auto px-4 py-8">
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="text-sm font-medium text-gray-500 mb-1">Total Submissions</div>
+                    <div class="text-2xl font-bold text-gray-900" x-text="stats.total_submissions || 0"></div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="text-sm font-medium text-gray-500 mb-1">Total Samples</div>
+                    <div class="text-2xl font-bold text-gray-900" x-text="stats.total_samples || 0"></div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="text-sm font-medium text-gray-500 mb-1">Avg Quality Score</div>
+                    <div class="text-2xl font-bold text-gray-900" x-text="stats.average_quality_score ? stats.average_quality_score.toFixed(2) : 'N/A'"></div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="text-sm font-medium text-gray-500 mb-1">Processing Today</div>
+                    <div class="text-2xl font-bold text-gray-900" x-text="stats.processing_today || 0"></div>
                 </div>
             </div>
-        </div>
 
-        <div class="bg-white shadow rounded-lg p-6">
-            <div class="flex items-center">
-                <div class="flex-shrink-0">
-                    <div class="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
-                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path>
-                        </svg>
+            <!-- Recent Submissions -->
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b">
+                    <h2 class="text-lg font-semibold text-gray-900">Recent Submissions</h2>
+                </div>
+                <div class="p-6">
+                    <div x-show="loading" class="text-center py-8">
+                        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                        <div class="mt-2 text-gray-600">Loading submissions...</div>
+                    </div>
+                    
+                    <div x-show="!loading && recentSubmissions.length === 0" class="text-center py-8 text-gray-500">
+                        No submissions found. <a href="/upload.html" class="text-blue-600 hover:underline">Upload your first PDF</a>
+                    </div>
+                    
+                    <div x-show="!loading && recentSubmissions.length > 0" class="overflow-x-auto">
+                        <table class="min-w-full">
+                            <thead>
+                                <tr class="border-b">
+                                    <th class="text-left py-2 px-3 font-medium text-gray-700">ID</th>
+                                    <th class="text-left py-2 px-3 font-medium text-gray-700">Date</th>
+                                    <th class="text-left py-2 px-3 font-medium text-gray-700">Samples</th>
+                                    <th class="text-left py-2 px-3 font-medium text-gray-700">Status</th>
+                                    <th class="text-left py-2 px-3 font-medium text-gray-700">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="submission in recentSubmissions" :key="submission.id">
+                                    <tr class="border-b hover:bg-gray-50">
+                                        <td class="py-2 px-3">
+                                            <span class="font-mono text-sm" x-text="submission.id.substring(0, 8)"></span>
+                                        </td>
+                                        <td class="py-2 px-3 text-sm" x-text="new Date(submission.created_at).toLocaleDateString()"></td>
+                                        <td class="py-2 px-3 text-sm" x-text="submission.sample_count"></td>
+                                        <td class="py-2 px-3">
+                                            <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800" x-text="submission.status || 'Completed'"></span>
+                                        </td>
+                                        <td class="py-2 px-3">
+                                            <button @click="viewSubmission(submission.id)" class="text-blue-600 hover:underline text-sm">View</button>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-                <div class="ml-4">
-                    <p class="text-sm font-medium text-gray-500">Total Samples</p>
-                    <p class="text-2xl font-semibold text-gray-900" x-text="stats.total_samples || '0'"></p>
-                </div>
             </div>
-        </div>
 
-        <div class="bg-white shadow rounded-lg p-6">
-            <div class="flex items-center">
-                <div class="flex-shrink-0">
-                    <div class="w-8 h-8 bg-yellow-500 rounded-md flex items-center justify-center">
-                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                    </div>
-                </div>
-                <div class="ml-4">
-                    <p class="text-sm font-medium text-gray-500">QC Pending</p>
-                    <p class="text-2xl font-semibold text-gray-900" x-text="stats.qc_status?.pending || '0'"></p>
-                </div>
+            <!-- Error Display -->
+            <div x-show="error" class="mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+                <strong>Error:</strong> <span x-text="error"></span>
             </div>
-        </div>
-
-        <div class="bg-white shadow rounded-lg p-6">
-            <div class="flex items-center">
-                <div class="flex-shrink-0">
-                    <div class="w-8 h-8 bg-purple-500 rounded-md flex items-center justify-center">
-                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
-                        </svg>
-                    </div>
-                </div>
-                <div class="ml-4">
-                    <p class="text-sm font-medium text-gray-500">Avg Quality Score</p>
-                    <p class="text-2xl font-semibold text-gray-900" x-text="stats.average_quality_score ? stats.average_quality_score.toFixed(1) : 'N/A'"></p>
-                </div>
-            </div>
-        </div>
+        </main>
     </div>
 
-    <!-- Charts Row -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Workflow Status Chart -->
-        <div class="bg-white shadow rounded-lg p-6">
-            <h3 class="text-lg font-medium text-gray-900 mb-4">Workflow Status Distribution</h3>
-            <div class="relative" style="height: 300px;">
-                <canvas id="workflowChart"></canvas>
-            </div>
-        </div>
+    <script>
+        function app() {
+            return {
+                apiStatus: 'Checking...',
+                stats: {},
+                recentSubmissions: [],
+                loading: true,
+                error: null,
 
-        <!-- QC Status Chart -->
-        <div class="bg-white shadow rounded-lg p-6">
-            <h3 class="text-lg font-medium text-gray-900 mb-4">QC Status Distribution</h3>
-            <div class="relative" style="height: 300px;">
-                <canvas id="qcChart"></canvas>
-            </div>
-        </div>
-    </div>
+                async init() {
+                    await this.checkApiConnection();
+                    await this.loadData();
+                },
 
-    <!-- Recent Submissions -->
-    <div class="bg-white shadow rounded-lg">
-        <div class="px-6 py-4 border-b border-gray-200">
-            <h3 class="text-lg font-medium text-gray-900">Recent Submissions</h3>
-        </div>
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Identifier</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Requester</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lab</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Samples</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
-                    <template x-for="submission in recentSubmissions" :key="submission.id">
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900" x-text="submission.id.substring(0, 8) + '...'"></td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="submission.metadata.identifier || 'N/A'"></td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="submission.metadata.requester || 'N/A'"></td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="submission.metadata.lab || 'N/A'"></td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="submission.sample_count"></td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="formatDate(submission.created_at)"></td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                <a :href="'/submission/' + submission.id" class="text-blue-600 hover:text-blue-900">View</a>
-                            </td>
-                        </tr>
-                    </template>
-                    <tr x-show="recentSubmissions.length === 0">
-                        <td colspan="7" class="px-6 py-4 text-center text-sm text-gray-500">No submissions found</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
+                async checkApiConnection() {
+                    try {
+                        // Use GET with limit=1 instead of HEAD as the API doesn't support HEAD requests
+                        const response = await fetch(window.API_CONFIG.getApiUrl('api/v1/submissions/?limit=1'), { 
+                            method: 'GET',
+                            signal: AbortSignal.timeout(5000)
+                        });
+                        this.apiStatus = response.ok ? 'Connected' : 'Error';
+                    } catch (error) {
+                        this.apiStatus = 'Disconnected';
+                    }
+                },
 
-    <!-- Quick Actions -->
-    <div class="bg-white shadow rounded-lg p-6">
-        <h3 class="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <button @click="applyQCToAll()" class="p-4 border-2 border-dashed border-gray-300 rounded-lg text-center hover:border-blue-400 hover:bg-blue-50 transition-colors">
-                <svg class="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-                <p class="text-sm font-medium text-gray-900">Apply QC to All</p>
-                <p class="text-xs text-gray-500">Run quality control on all samples</p>
-            </button>
-
-            <button @click="exportAllData()" class="p-4 border-2 border-dashed border-gray-300 rounded-lg text-center hover:border-green-400 hover:bg-green-50 transition-colors">
-                <svg class="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                </svg>
-                <p class="text-sm font-medium text-gray-900">Export All Data</p>
-                <p class="text-xs text-gray-500">Download all submissions and samples</p>
-            </button>
-
-            <button @click="generateReport()" class="p-4 border-2 border-dashed border-gray-300 rounded-lg text-center hover:border-purple-400 hover:bg-purple-50 transition-colors">
-                <svg class="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                </svg>
-                <p class="text-sm font-medium text-gray-900">Generate Report</p>
-                <p class="text-xs text-gray-500">Create comprehensive analysis report</p>
-            </button>
-        </div>
-    </div>
-</div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-function dashboard() {
-    return {
-        stats: {},
-        recentSubmissions: [],
-        workflowChart: null,
-        qcChart: null,
-        
-        async init() {
-            await this.loadData();
-            // Wait for DOM to be ready and Chart.js to be loaded
-            setTimeout(() => {
-                this.setupCharts();
-            }, 100);
-        },
-        
-        async loadData() {
-            try {
-                // Load global statistics
-                const statsResponse = await fetch('/api/v1/submissions/statistics');
-                if (!statsResponse.ok) throw new Error('Failed to load statistics');
-                this.stats = await statsResponse.json();
-                
-                // Load recent submissions
-                const submissionsResponse = await fetch('/api/v1/submissions/?limit=10');
-                if (!submissionsResponse.ok) throw new Error('Failed to load submissions');
-                const submissionsData = await submissionsResponse.json();
-                this.recentSubmissions = submissionsData.items || [];
-                
-                console.log('Dashboard loaded:', {
-                    total_submissions: this.stats.total_submissions,
-                    total_samples: this.stats.total_samples,
-                    workflow_status: this.stats.workflow_status,
-                    qc_status: this.stats.qc_status,
-                    recent_count: this.recentSubmissions.length
-                });
-                
-            } catch (error) {
-                console.error('Dashboard error:', error);
-                // Use default values if API fails
-                this.stats = {
-                    total_submissions: 0,
-                    total_samples: 0,
-                    workflow_status: {},
-                    qc_status: {},
-                    average_quality_score: null
-                };
-                this.recentSubmissions = [];
-            }
-        },
-        
-        setupCharts() {
-            // Destroy existing charts if they exist
-            if (this.workflowChart) {
-                this.workflowChart.destroy();
-                this.workflowChart = null;
-            }
-            if (this.qcChart) {
-                this.qcChart.destroy();
-                this.qcChart = null;
-            }
-            
-            // Workflow Status Chart
-            const workflowCtx = document.getElementById('workflowChart');
-            if (workflowCtx) {
-                const workflowData = [
-                    this.stats.workflow_status?.received || 0,
-                    this.stats.workflow_status?.processing || 0,
-                    this.stats.workflow_status?.sequenced || 0,
-                    this.stats.workflow_status?.completed || 0,
-                    this.stats.workflow_status?.failed || 0,
-                    this.stats.workflow_status?.pending || 0
-                ];
-                
-                // Only show chart if there's data
-                if (workflowData.some(v => v > 0)) {
-                    this.workflowChart = new Chart(workflowCtx.getContext('2d'), {
-                        type: 'doughnut',
-                        data: {
-                            labels: ['Received', 'Processing', 'Sequenced', 'Completed', 'Failed', 'Pending'],
-                            datasets: [{
-                                data: workflowData,
-                                backgroundColor: [
-                                    '#3B82F6', '#F59E0B', '#8B5CF6', '#10B981', '#EF4444', '#6B7280'
-                                ],
-                                borderWidth: 1,
-                                borderColor: '#fff'
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: {
-                                    position: 'bottom',
-                                    labels: {
-                                        padding: 15,
-                                        font: {
-                                            size: 12
-                                        }
-                                    }
-                                },
-                                tooltip: {
-                                    callbacks: {
-                                        label: function(context) {
-                                            let label = context.label || '';
-                                            if (label) {
-                                                label += ': ';
-                                            }
-                                            label += context.parsed;
-                                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                            const percentage = ((context.parsed / total) * 100).toFixed(1);
-                                            label += ` (${percentage}%)`;
-                                            return label;
-                                        }
-                                    }
-                                }
-                            }
+                async loadData() {
+                    this.loading = true;
+                    this.error = null;
+                    
+                    try {
+                        // Load statistics
+                        const statsResponse = await fetch(window.API_CONFIG.getApiUrl('api/v1/submissions/statistics'));
+                        if (statsResponse.ok) {
+                            this.stats = await statsResponse.json();
                         }
-                    });
-                } else {
-                    // Show no data message
-                    workflowCtx.getContext('2d').font = '14px sans-serif';
-                    workflowCtx.getContext('2d').textAlign = 'center';
-                    workflowCtx.getContext('2d').fillStyle = '#6B7280';
-                    workflowCtx.getContext('2d').fillText('No workflow data available', workflowCtx.width / 2, workflowCtx.height / 2);
-                }
-            }
-            
-            // QC Status Chart
-            const qcCtx = document.getElementById('qcChart');
-            if (qcCtx) {
-                const qcData = [
-                    this.stats.qc_status?.pending || 0,
-                    this.stats.qc_status?.passed || 0,
-                    this.stats.qc_status?.warning || 0,
-                    this.stats.qc_status?.failed || 0
-                ];
-                
-                // Only show chart if there's data
-                if (qcData.some(v => v > 0)) {
-                    this.qcChart = new Chart(qcCtx.getContext('2d'), {
-                        type: 'doughnut',
-                        data: {
-                            labels: ['Pending', 'Passed', 'Warning', 'Failed'],
-                            datasets: [{
-                                data: qcData,
-                                backgroundColor: [
-                                    '#6B7280', '#10B981', '#F59E0B', '#EF4444'
-                                ],
-                                borderWidth: 1,
-                                borderColor: '#fff'
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: {
-                                    position: 'bottom',
-                                    labels: {
-                                        padding: 15,
-                                        font: {
-                                            size: 12
-                                        }
-                                    }
-                                },
-                                tooltip: {
-                                    callbacks: {
-                                        label: function(context) {
-                                            let label = context.label || '';
-                                            if (label) {
-                                                label += ': ';
-                                            }
-                                            label += context.parsed;
-                                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                            const percentage = ((context.parsed / total) * 100).toFixed(1);
-                                            label += ` (${percentage}%)`;
-                                            return label;
-                                        }
-                                    }
-                                }
-                            }
+                        
+                        // Load recent submissions
+                        const submissionsResponse = await fetch(window.API_CONFIG.getApiUrl('api/v1/submissions/?limit=10'));
+                        if (submissionsResponse.ok) {
+                            const data = await submissionsResponse.json();
+                            this.recentSubmissions = data.items || [];
+                        } else {
+                            throw new Error('Failed to load submissions');
                         }
-                    });
-                } else {
-                    // Show no data message
-                    qcCtx.getContext('2d').font = '14px sans-serif';
-                    qcCtx.getContext('2d').textAlign = 'center';
-                    qcCtx.getContext('2d').fillStyle = '#6B7280';
-                    qcCtx.getContext('2d').fillText('No QC data available', qcCtx.width / 2, qcCtx.height / 2);
+                    } catch (error) {
+                        console.error('Error loading data:', error);
+                        this.error = error.message;
+                        // Use dummy data if API fails
+                        this.stats = {
+                            total_submissions: 0,
+                            total_samples: 0,
+                            average_quality_score: null,
+                            processing_today: 0
+                        };
+                        this.recentSubmissions = [];
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                viewSubmission(id) {
+                    window.location.href = `/submission.html?id=${id}`;
                 }
-            }
-        },
-        
-        async refreshData() {
-            await this.loadData();
-            this.updateCharts();
-            showFlash('Dashboard data refreshed', 'success');
-        },
-        
-        updateCharts() {
-            if (this.workflowChart) {
-                this.workflowChart.data.datasets[0].data = [
-                    this.stats.workflow_status?.received || 0,
-                    this.stats.workflow_status?.processing || 0,
-                    this.stats.workflow_status?.sequenced || 0,
-                    this.stats.workflow_status?.completed || 0,
-                    this.stats.workflow_status?.failed || 0,
-                    this.stats.workflow_status?.pending || 0
-                ];
-                this.workflowChart.update();
-            }
-            
-            if (this.qcChart) {
-                this.qcChart.data.datasets[0].data = [
-                    this.stats.qc_status?.pending || 0,
-                    this.stats.qc_status?.passed || 0,
-                    this.stats.qc_status?.warning || 0,
-                    this.stats.qc_status?.failed || 0
-                ];
-                this.qcChart.update();
-            }
-        },
-        
-        formatDate(dateString) {
-            if (!dateString) return 'N/A';
-            return new Date(dateString).toLocaleDateString();
-        },
-        
-        async applyQCToAll() {
-            if (!confirm('Apply QC to all submissions? This may take a while.')) return;
-            
-            try {
-                showFlash('Applying QC to all submissions...', 'info');
-                // This would call the batch QC endpoint
-                showFlash('QC applied successfully', 'success');
-            } catch (error) {
-                showFlash('Failed to apply QC: ' + error.message, 'error');
-            }
-        },
-        
-        async exportAllData() {
-            try {
-                showFlash('Preparing export...', 'info');
-                // This would call the export endpoint
-                showFlash('Export ready for download', 'success');
-            } catch (error) {
-                showFlash('Failed to export data: ' + error.message, 'error');
-            }
-        },
-        
-        async generateReport() {
-            try {
-                showFlash('Generating report...', 'info');
-                // This would call the report generation endpoint
-                showFlash('Report generated successfully', 'success');
-            } catch (error) {
-                showFlash('Failed to generate report: ' + error.message, 'error');
-            }
+            };
         }
-    }
-}
-</script>
-{% endblock %}
+    </script>
+</body>
+</html>

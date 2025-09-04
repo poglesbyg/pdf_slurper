@@ -162,3 +162,28 @@ class SampleListResponse(BaseModel):
     total: int
     offset: int
     limit: int
+
+
+class StatisticsResponse(BaseModel):
+    """Statistics response schema."""
+    
+    total_submissions: int = 0
+    total_samples: int = 0
+    passed_samples: int = 0
+    failed_samples: int = 0
+    pending_samples: int = 0
+    average_quality: Optional[float] = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SampleRequest(BaseModel):
+    """Sample request schema for creating new samples."""
+    
+    name: str = Field(..., description="Sample name")
+    volume_ul: Optional[float] = Field(None, description="Volume in microliters")
+    qubit_ng_per_ul: Optional[float] = Field(None, description="Qubit concentration")
+    nanodrop_ng_per_ul: Optional[float] = Field(None, description="Nanodrop concentration")
+    a260_a280: Optional[float] = Field(None, description="A260/A280 ratio")
+    a260_a230: Optional[float] = Field(None, description="A260/A230 ratio")
+    status: Optional[str] = Field("received", description="Sample status")
