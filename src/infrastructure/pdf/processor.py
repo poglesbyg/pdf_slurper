@@ -124,6 +124,20 @@ class PDFProcessor:
         for table in tables:
             if not table["rows"]:
                 continue
+            
+            # Check if this is a sample table by looking at headers
+            headers_str = ' '.join([str(h).lower() for h in table["headers"]])
+            
+            # Skip non-sample tables (metadata tables from page 1, pricing tables, etc.)
+            is_sample_table = (
+                'sample name' in headers_str or
+                'volume' in headers_str or
+                'qubit' in headers_str or
+                'nanodrop' in headers_str
+            )
+            
+            if not is_sample_table:
+                continue
                 
             # Look for sample data in table rows
             for row_idx, row in enumerate(table["rows"]):
@@ -147,42 +161,64 @@ class PDFProcessor:
         sample_data = {}
         
         for i, (header, value) in enumerate(zip(headers, row)):
-            if not header or not value:
+            if not header:
                 continue
                 
             header_lower = header.lower().strip()
-            value_str = str(value).strip()
+            value_str = str(value).strip() if value else ""
             
-            # Extract sample name/ID
-            if any(keyword in header_lower for keyword in ["sample", "id", "name", "well"]):
-                sample_data["name"] = value_str
+            # Extract sample name/ID - Column "Sample Name"
+            if "sample name" in header_lower:
+                if value_str:
+                    sample_data["name"] = value_str
             
-            # Extract volume
-            elif any(keyword in header_lower for keyword in ["volume", "ul", "μl"]):
-                try:
-                    volume = float(value_str.replace("μL", "").replace("ul", "").strip())
-                    sample_data["volume_ul"] = volume
-                except ValueError:
-                    pass
+            # Extract volume - Column "Volume (µL)"
+            elif "volume" in header_lower:
+                if value_str:
+                    try:
+                        volume = float(value_str.replace("μL", "").replace("µL", "").replace("ul", "").strip())
+                        sample_data["volume_ul"] = volume
+                    except (ValueError, AttributeError):
+                        pass
             
-            # Extract concentration
-            elif any(keyword in header_lower for keyword in ["qubit", "concentration", "ng/ul"]):
-                try:
-                    conc = float(value_str.replace("ng/μL", "").replace("ng/ul", "").strip())
-                    sample_data["qubit_ng_per_ul"] = conc
-                except ValueError:
-                    pass
+            # Extract Qubit concentration - Column "Qubit Conc. (ng/µL)"
+            elif "qubit" in header_lower:
+                if value_str:
+                    try:
+                        conc = float(value_str.replace("ng/μL", "").replace("ng/µL", "").replace("ng/ul", "").strip())
+                        sample_data["qubit_ng_per_ul"] = conc
+                    except (ValueError, AttributeError):
+                        pass
             
-            # Extract quality ratios
+            # Extract Nanodrop concentration - Column "Nanodrop Conc. (ng/µL)"
+            elif "nanodrop" in header_lower:
+                if value_str:
+                    try:
+                        conc = float(value_str.replace("ng/μL", "").replace("ng/µL", "").replace("ng/ul", "").strip())
+                        sample_data["nanodrop_ng_per_ul"] = conc
+                    except (ValueError, AttributeError):
+                        pass
+            
+            # Extract quality ratios - Column "A260/A280 ratio"
             elif "a260/a280" in header_lower or "260/280" in header_lower:
-                try:
-                    ratio = float(value_str)
-                    sample_data["a260_a280"] = ratio
-                except ValueError:
-                    pass
+                if value_str:
+                    try:
+                        ratio = float(value_str)
+                        sample_data["a260_a280"] = ratio
+                    except (ValueError, AttributeError):
+                        pass
+            
+            # Extract A260/A230 ratio
+            elif "a260/a230" in header_lower or "260/230" in header_lower:
+                if value_str:
+                    try:
+                        ratio = float(value_str)
+                        sample_data["a260_a230"] = ratio
+                    except (ValueError, AttributeError):
+                        pass
         
         # Only return if we found meaningful data
-        if sample_data and (sample_data.get("name") or sample_data.get("volume_ul") or sample_data.get("qubit_ng_per_ul")):
+        if sample_data and (sample_data.get("name") or sample_data.get("volume_ul") or sample_data.get("nanodrop_ng_per_ul") or sample_data.get("qubit_ng_per_ul")):
             return sample_data
         
         return None

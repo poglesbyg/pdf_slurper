@@ -269,6 +269,56 @@ async def list_submissions(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/{submission_id}/samples")
+async def get_submission_samples(
+    submission_id: str,
+    limit: int = Query(100, ge=1, le=1000, description="Maximum results"),
+    offset: int = Query(0, ge=0, description="Results offset"),
+    container: Container = Depends(get_container_dependency)
+):
+    """Get samples for a submission."""
+    # Import models
+    from sqlmodel import Session
+    from src.infrastructure.persistence.models import SampleORM
+    
+    # Use the database from container
+    with Session(container.database.engine) as session:
+        # Get total count first
+        count_stmt = select(func.count(SampleORM.id)).where(
+            SampleORM.submission_id == submission_id
+        )
+        total = session.exec(count_stmt).one()
+        
+        # Get paginated samples
+        stmt = (
+            select(SampleORM)
+            .where(SampleORM.submission_id == submission_id)
+            .offset(offset)
+            .limit(limit)
+        )
+        
+        samples = session.exec(stmt).all()
+        
+        # Convert to response format
+        sample_list = []
+        for sample in samples:
+            sample_list.append({
+                "id": sample.id,
+                "name": sample.name,
+                "volume_ul": sample.volume_ul,
+                "qubit_ng_per_ul": sample.qubit_ng_per_ul,
+                "nanodrop_ng_per_ul": sample.nanodrop_ng_per_ul,
+                "a260_a280": sample.a260_a280,
+                "a260_a230": sample.a260_a230,
+                "status": sample.status or "pending",
+                "row_index": sample.row_index,
+                "table_index": sample.table_index,
+                "page_index": sample.page_index
+            })
+        
+        return {"items": sample_list, "total": total}
+
+
 @router.get(
     "/{submission_id}",
     response_model=SubmissionResponse,
@@ -324,62 +374,7 @@ async def get_submission(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get(
-    "/{submission_id}/samples",
-    summary="Get samples for submission",
-    description="Retrieve all samples for a submission"
-)
-async def get_submission_samples(
-    submission_id: str,
-    limit: int = Query(100, ge=1, le=1000, description="Maximum results"),
-    offset: int = Query(0, ge=0, description="Results offset"),
-    container: Container = Depends(get_container_dependency)
-):
-    """Get samples for a submission."""
-    try:
-        # Get submission from repository
-        submission = await container.submission_service.get_by_id(
-            SubmissionId(submission_id)
-        )
-        
-        if not submission:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Submission not found: {submission_id}"
-            )
-        
-        # Get samples from submission using legacy database
-        with open_session() as session:
-            stmt = (
-                select(LegacySample)
-                .where(LegacySample.submission_id == submission_id)
-                .offset(offset)
-                .limit(limit)
-            )
-            
-            samples = session.exec(stmt).all()
-            
-            # Convert to response format
-            sample_list = []
-            for sample in samples:
-                sample_list.append({
-                    "id": sample.id,
-                    "name": sample.name,
-                    "volume_ul": sample.volume_ul,
-                    "qubit_ng_per_ul": sample.qubit_ng_per_ul,
-                    "nanodrop_ng_per_ul": sample.nanodrop_ng_per_ul,
-                    "a260_a280": sample.a260_a280,
-                    "a260_a230": sample.a260_a230,
-                    "status": sample.status or "pending",  # Use stored status or default
-                    "row_index": sample.row_index,
-                    "table_index": sample.table_index,
-                    "page_index": sample.page_index
-                })
-            
-            return {"items": sample_list, "total": len(sample_list)}
-            
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# Samples route moved before /{submission_id} route to fix route ordering
 
 
 @router.delete(
